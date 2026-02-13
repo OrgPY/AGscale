@@ -1,0 +1,85 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "agscale.fullname" . }}-mutating-webhook-configuration
+  {{- if .Values.webhook.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Values.webhook.certManager.certificateName }}
+  {{- end }}
+webhooks:
+  - name: magent.agscale.io
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "agscale.fullname" . }}-webhook-service
+        path: /mutate-agscale-io-v1alpha1-agent
+      {{- if not .Values.webhook.certManager.enabled }}
+      caBundle: Cg==
+      {{- end }}
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["agscale.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["agents"]
+  - name: magentbudgetpolicy.agscale.io
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "agscale.fullname" . }}-webhook-service
+        path: /mutate-agscale-io-v1alpha1-agentbudgetpolicy
+      {{- if not .Values.webhook.certManager.enabled }}
+      caBundle: Cg==
+      {{- end }}
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["agscale.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["agentbudgetpolicies"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "agscale.fullname" . }}-validating-webhook-configuration
+  {{- if .Values.webhook.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Values.webhook.certManager.certificateName }}
+  {{- end }}
+webhooks:
+  - name: vagent.agscale.io
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "agscale.fullname" . }}-webhook-service
+        path: /validate-agscale-io-v1alpha1-agent
+      {{- if not .Values.webhook.certManager.enabled }}
+      caBundle: Cg==
+      {{- end }}
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["agscale.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["agents"]
+  - name: vagentbudgetpolicy.agscale.io
+    sideEffects: None
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "agscale.fullname" . }}-webhook-service
+        path: /validate-agscale-io-v1alpha1-agentbudgetpolicy
+      {{- if not .Values.webhook.certManager.enabled }}
+      caBundle: Cg==
+      {{- end }}
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["agscale.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["agentbudgetpolicies"]
+{{- end }}

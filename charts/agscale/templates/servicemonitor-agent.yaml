@@ -1,0 +1,22 @@
+{{- if and .Values.observability.enabled .Values.observability.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "agscale.fullname" . }}-agents
+  labels:
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/managed-by
+        operator: In
+        values:
+          - agscale-controller
+  namespaceSelector:
+    any: true
+  endpoints:
+    - port: http
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+      path: /metrics
+{{- end }}

@@ -1,0 +1,64 @@
+{{- if and .Values.observability.enabled .Values.observability.prometheusRule.enabled .Values.observability.alerting.installed }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "agscale.fullname" . }}-alerts
+  labels:
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    agscale.io/alert-state: {{ ternary "active" "inactive" .Values.observability.alerting.active | quote }}
+spec:
+  groups:
+    - name: agscale.controller
+      rules:
+        - alert: AGScaleControllerReconcileErrors
+          expr: {{- if or .Values.observability.alerting.active .Values.observability.alerting.rules.controller_reconcile_errors.active }} sum(rate(agscale_reconcile_errors_total[5m])) > 0 {{- else }} vector(0) {{- end }}
+          for: 10m
+          labels:
+            severity: warning
+            service: agscale-controller
+          annotations:
+            summary: agscale controller reconcile errors detected
+            runbook_url: https://example.com/runbooks/agscale-controller-reconcile-errors
+            agscale.io/default-active: "false"
+        - alert: AGScaleAgentNotReady
+          expr: {{- if or .Values.observability.alerting.active .Values.observability.alerting.rules.agent_not_ready.active }} min(agscale_agent_condition_transitions_total{condition="Ready",status="False"}) > 0 {{- else }} vector(0) {{- end }}
+          for: 10m
+          labels:
+            severity: warning
+            service: agscale-agent
+          annotations:
+            summary: agscale agent readiness issues detected
+            runbook_url: https://example.com/runbooks/agscale-agent-not-ready
+            agscale.io/default-active: "false"
+        - alert: AGScaleSkillResolutionFailures
+          expr: {{- if or .Values.observability.alerting.active .Values.observability.alerting.rules.skill_resolution_failures.active }} sum(rate(agscale_skill_resolution_total{outcome="error"}[5m])) > 0 {{- else }} vector(0) {{- end }}
+          for: 10m
+          labels:
+            severity: warning
+            service: agscale-skills
+          annotations:
+            summary: agscale skill resolution failures detected
+            runbook_url: https://example.com/runbooks/agscale-skill-resolution-failures
+            agscale.io/default-active: "false"
+        - alert: AGScaleBudgetExceeded
+          expr: {{- if or .Values.observability.alerting.active .Values.observability.alerting.rules.budget_exceeded.active }} sum(rate(agscale_budget_exceeded_total[5m])) > 0 {{- else }} vector(0) {{- end }}
+          for: 10m
+          labels:
+            severity: warning
+            service: agscale-budget
+          annotations:
+            summary: agscale budget threshold exceeded
+            runbook_url: https://example.com/runbooks/agscale-budget-exceeded
+            agscale.io/default-active: "false"
+        - alert: AGScaleBudgetTelemetryStale
+          expr: {{- if or .Values.observability.alerting.active .Values.observability.alerting.rules.budget_telemetry_stale.active }} sum(rate(agscale_budget_telemetry_stale_total[5m])) > 0 {{- else }} vector(0) {{- end }}
+          for: 10m
+          labels:
+            severity: warning
+            service: agscale-budget
+          annotations:
+            summary: agscale budget telemetry stale or missing
+            runbook_url: https://example.com/runbooks/agscale-budget-telemetry-stale
+            agscale.io/default-active: "false"
+{{- end }}

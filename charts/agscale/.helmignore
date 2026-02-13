@@ -1,0 +1,10 @@
+# VCS
+.git/
+.github/
+
+# OS files
+.DS_Store
+
+# Build
+bin/
+.cache/

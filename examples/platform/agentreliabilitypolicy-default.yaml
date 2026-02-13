@@ -1,0 +1,17 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentReliabilityPolicy
+metadata:
+  name: default-reliability
+spec:
+  health:
+    startupGraceSeconds: 120
+    failureWindowSeconds: 300
+    minReadyPercent: 80
+  remediation:
+    actions:
+      - RestartPods
+      - ScaleOut
+      - RollbackRevision
+      - FailOpenReadOnly
+    maxActionsPerHour: 6
+    cooldownSeconds: 300

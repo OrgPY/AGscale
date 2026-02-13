@@ -1,0 +1,80 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/example/agscale-controller
+  tag: latest
+  pullPolicy: IfNotPresent
+
+leaderElection: true
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources: {}
+
+webhook:
+  enabled: true
+  service:
+    port: 443
+    targetPort: 9443
+  certManager:
+    enabled: true
+    issuerName: agscale-selfsigned-issuer
+    certificateName: agscale-serving-cert
+    secretName: agscale-webhook-server-cert
+
+rbac:
+  create: true
+
+observability:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  prometheusRule:
+    enabled: true
+  grafanaDashboards:
+    enabled: true
+  otel:
+    enabled: false
+    collectorEndpoint: ""
+  alerting:
+    installed: true
+    active: false
+    mode: custom
+    overrides: {}
+    rules:
+      controller_reconcile_errors:
+        active: false
+      agent_not_ready:
+        active: false
+      skill_resolution_failures:
+        active: false
+      budget_exceeded:
+        active: false
+      budget_telemetry_stale:
+        active: false
+
+budget:
+  enabled: true
+  evalIntervalSeconds: 60
+  defaultStaleAfterSeconds: 300
+
+reliability:
+  defaultPolicy:
+    enabled: true
+    name: default-reliability
+    spec:
+      health:
+        startupGraceSeconds: 120
+        failureWindowSeconds: 300
+        minReadyPercent: 80
+      remediation:
+        actions:
+          - RestartPods
+          - ScaleOut
+          - RollbackRevision
+          - FailOpenReadOnly
+        maxActionsPerHour: 6
+        cooldownSeconds: 300

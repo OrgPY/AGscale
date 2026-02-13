@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - agentbudgetpolicy-namespace-default.yaml
+  - agentskill-web-search.yaml
+  - skillregistry-public-hub.yaml
+  - agentreliabilitypolicy-default.yaml
+  - agentruntime-python.yaml
+  - llmendpoint-openai.yaml
+  - memorystore-redis.yaml
+  - contextprovider-git.yaml

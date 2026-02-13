@@ -1,0 +1,116 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agentreliabilitypolicies.agscale.io
+spec:
+  group: agscale.io
+  scope: Namespaced
+  names:
+    plural: agentreliabilitypolicies
+    singular: agentreliabilitypolicy
+    kind: AgentReliabilityPolicy
+    shortNames:
+      - arp
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                slo:
+                  type: object
+                  properties:
+                    availabilityTarget:
+                      type: string
+                    latencyP95Ms:
+                      type: integer
+                    errorRateThreshold:
+                      type: number
+                health:
+                  type: object
+                  properties:
+                    startupGraceSeconds:
+                      type: integer
+                    failureWindowSeconds:
+                      type: integer
+                    minReadyPercent:
+                      type: integer
+                dependencyChecks:
+                  type: object
+                  properties:
+                    llm:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        timeoutMs:
+                          type: integer
+                        consecutiveFailuresForOpen:
+                          type: integer
+                    memory:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        timeoutMs:
+                          type: integer
+                        consecutiveFailuresForOpen:
+                          type: integer
+                    context:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        timeoutMs:
+                          type: integer
+                        consecutiveFailuresForOpen:
+                          type: integer
+                remediation:
+                  type: object
+                  properties:
+                    actions:
+                      type: array
+                      items:
+                        type: string
+                    maxActionsPerHour:
+                      type: integer
+                    cooldownSeconds:
+                      type: integer
+                rollback:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    maxRevisionHistory:
+                      type: integer
+                    triggerOnCondition:
+                      type: array
+                      items:
+                        type: string
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: MinReady
+          type: integer
+          jsonPath: .spec.health.minReadyPercent
+        - name: Cooldown
+          type: integer
+          jsonPath: .spec.remediation.cooldownSeconds
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}

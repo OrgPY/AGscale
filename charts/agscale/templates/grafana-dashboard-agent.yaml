@@ -1,0 +1,28 @@
+{{- if and .Values.observability.enabled .Values.observability.grafanaDashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agscale.fullname" . }}-dashboard-agent
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  agscale-agent.json: |
+    {
+      "title": "AGScale Agent",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Remediation Actions",
+          "targets": [{"expr": "sum by (action,outcome) (rate(agscale_agent_remediation_total[5m]))"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Skill Resolution Errors",
+          "targets": [{"expr": "sum(rate(agscale_skill_resolution_total{outcome=\"error\"}[5m]))"}]
+        }
+      ]
+    }
+{{- end }}

@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agscale-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agscale-controller-manager
+  namespace: agscale-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agscale-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agscale-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: agscale-controller-manager
+    namespace: agscale-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agscale-controller-manager
+  namespace: agscale-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agscale-controller-manager
+  template:
+    metadata:
+      labels:
+        app: agscale-controller-manager
+    spec:
+      serviceAccountName: agscale-controller-manager
+      containers:
+        - name: manager
+          image: ghcr.io/example/agscale-controller:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --leader-elect
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            - --webhook-port=9443
+          ports:
+            - containerPort: 9443
+              name: webhook
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 8081
+              name: probes

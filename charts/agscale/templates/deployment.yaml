@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agscale.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "agscale.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "agscale.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "agscale.serviceAccountName" . }}
+      containers:
+        - name: manager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            {{- if .Values.leaderElection }}
+            - --leader-elect
+            {{- end }}
+            - --webhook-port=9443
+          ports:
+            - name: webhook
+              containerPort: 9443
+            - name: metrics
+              containerPort: 8080
+            - name: probes
+              containerPort: 8081
+          env:
+            {{- if and .Values.observability.enabled .Values.observability.otel.enabled .Values.observability.otel.collectorEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.observability.otel.collectorEndpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ printf "%s-controller" (include "agscale.fullname" .) | quote }}
+            {{- end }}
+          volumeMounts:
+            {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+            - name: cert
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+            {{- end }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+        - name: cert
+          secret:
+            secretName: {{ .Values.webhook.certManager.secretName }}
+        {{- end }}

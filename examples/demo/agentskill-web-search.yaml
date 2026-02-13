@@ -1,0 +1,12 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentSkill
+metadata:
+  name: web-search
+spec:
+  source:
+    protocol: openapi-http
+    url: https://public-skillhub.example.com/skills/web-search
+    externalID: web-search
+  syncPolicy:
+    mode: Snapshot
+    intervalSeconds: 300

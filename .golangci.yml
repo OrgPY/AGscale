@@ -1,0 +1,36 @@
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-use-default: false
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - typecheck
+    - gosimple
+    - unused
+    - revive
+    - gofmt
+    - goimports
+    - misspell
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        disabled: true
+  goimports:
+    local-prefixes: agscale
+
+exclude-rules:
+  - path: _test\.go
+    linters:
+      - errcheck

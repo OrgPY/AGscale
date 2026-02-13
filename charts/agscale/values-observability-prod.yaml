@@ -1,0 +1,18 @@
+observability:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+  grafanaDashboards:
+    enabled: true
+  alerting:
+    installed: true
+    active: true
+    rules:
+      controller_reconcile_errors:
+        active: true
+      agent_not_ready:
+        active: true
+      skill_resolution_failures:
+        active: true

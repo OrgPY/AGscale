@@ -1,0 +1,28 @@
+{{- if and .Values.observability.enabled .Values.observability.grafanaDashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agscale.fullname" . }}-dashboard-controller
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  agscale-controller.json: |
+    {
+      "title": "AGScale Controller",
+      "schemaVersion": 39,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Reconcile Duration p95",
+          "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(agscale_reconcile_duration_seconds_bucket{resource=\"Agent\"}[5m])))"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Reconcile Errors",
+          "targets": [{"expr": "sum(rate(agscale_reconcile_errors_total[5m]))"}]
+        }
+      ]
+    }
+{{- end }}

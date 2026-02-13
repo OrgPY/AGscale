@@ -1,0 +1,23 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentBudgetPolicy
+metadata:
+  name: clawdbot-budget
+spec:
+  scope: Agent
+  targetRef:
+    name: clawdbot
+  window:
+    mode: Rolling24h
+  limits:
+    maxRequests24h: 50000
+    maxTokens24h: 10000000
+    maxEstimatedCostUSD24h: 150
+  usageSources:
+    metrics:
+      enabled: true
+  evaluation:
+    intervalSeconds: 60
+    staleAfterSeconds: 300
+  alerting:
+    emitK8sEvents: true
+    setConditions: true

@@ -1,0 +1,11 @@
+observability:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+  grafanaDashboards:
+    enabled: true
+  alerting:
+    installed: true
+    active: false

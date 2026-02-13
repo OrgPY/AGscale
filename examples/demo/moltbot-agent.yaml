@@ -1,0 +1,39 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: moltbot
+  annotations:
+    agscale.io/usage-updated-at: "2026-02-13T00:00:00Z"
+    agscale.io/usage-requests-24h: "8000"
+    agscale.io/usage-tokens-24h: "1400000"
+    agscale.io/usage-cost-usd-24h: "17.25"
+spec:
+  runtimeRef:
+    name: python-fastapi-runtime
+  reliabilityPolicyRef:
+    name: default-reliability
+  budgetPolicyRef:
+    name: moltbot-budget
+  skillResolutionPolicy: BestEffort
+  replicas: 1
+  llmEndpointRef:
+    name: shared-openai
+  memoryRefs:
+    - name: team-redis-memory
+  contextRefs:
+    - name: product-docs
+  skillRefs:
+    - name: web-search
+  image: ghcr.io/example/moltbot:0.1.0
+  env:
+    - name: AGENT_PROFILE
+      value: moltbot
+  service:
+    enabled: true
+    port: 80
+    targetPort: 8080
+    type: ClusterIP
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70

@@ -1,0 +1,31 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: support-agent
+spec:
+  runtimeRef:
+    name: python-fastapi-runtime
+  reliabilityPolicyRef:
+    name: default-reliability
+  skillResolutionPolicy: Strict
+  replicas: 2
+  llmEndpointRef:
+    name: shared-openai
+  memoryRefs:
+    - name: team-redis-memory
+  contextRefs:
+    - name: product-docs
+  skillRefs:
+    - name: web-search
+  env:
+    - name: AGENT_PROFILE
+      value: support
+  service:
+    enabled: true
+    port: 80
+    targetPort: 8080
+    type: ClusterIP
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70

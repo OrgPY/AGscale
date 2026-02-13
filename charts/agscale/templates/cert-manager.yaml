@@ -1,0 +1,21 @@
+{{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.webhook.certManager.issuerName }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.webhook.certManager.certificateName }}
+spec:
+  dnsNames:
+    - {{ include "agscale.fullname" . }}-webhook-service.{{ .Release.Namespace }}.svc
+    - {{ include "agscale.fullname" . }}-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ .Values.webhook.certManager.issuerName }}
+  secretName: {{ .Values.webhook.certManager.secretName }}
+{{- end }}

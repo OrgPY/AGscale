@@ -1,0 +1,220 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agents.agscale.io
+spec:
+  group: agscale.io
+  scope: Namespaced
+  names:
+    plural: agents
+    singular: agent
+    kind: Agent
+    shortNames:
+      - ag
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                runtimeRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                  required:
+                    - name
+                reliabilityPolicyRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                budgetPolicyRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                skillResolutionPolicy:
+                  type: string
+                  enum:
+                    - Strict
+                    - BestEffort
+                replicas:
+                  type: integer
+                llmEndpointRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                memoryRefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                    required:
+                      - name
+                contextRefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                    required:
+                      - name
+                skillRefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                    required:
+                      - name
+                image:
+                  type: string
+                imagePullPolicy:
+                  type: string
+                command:
+                  type: array
+                  items:
+                    type: string
+                args:
+                  type: array
+                  items:
+                    type: string
+                env:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+                resources:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                service:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    port:
+                      type: integer
+                    targetPort:
+                      type: integer
+                    type:
+                      type: string
+                autoscaling:
+                  type: object
+                  properties:
+                    minReplicas:
+                      type: integer
+                    maxReplicas:
+                      type: integer
+                    targetCPUUtilizationPercentage:
+                      type: integer
+                observability:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    metrics:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        port:
+                          type: integer
+                    tracing:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        otelEndpoint:
+                          type: string
+                    alertProfile:
+                      type: string
+                podAnnotations:
+                  type: object
+                  additionalProperties:
+                    type: string
+                podLabels:
+                  type: object
+                  additionalProperties:
+                    type: string
+              required:
+                - runtimeRef
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                readyReplicas:
+                  type: integer
+                serviceName:
+                  type: string
+                url:
+                  type: string
+                lastRemediationAction:
+                  type: string
+                lastRemediationTime:
+                  type: string
+                  format: date-time
+                recentRemediations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      action:
+                        type: string
+                      reason:
+                        type: string
+                      timestamp:
+                        type: string
+                        format: date-time
+                observabilityLastScrapeReady:
+                  type: boolean
+                observabilityLastTelemetryError:
+                  type: string
+                budgetPhase:
+                  type: string
+                budgetReason:
+                  type: string
+                budgetLastEvaluatedTime:
+                  type: string
+                  format: date-time
+                budgetUsageSnapshot:
+                  type: object
+                  properties:
+                    requests24h:
+                      type: integer
+                    tokens24h:
+                      type: integer
+                    estimatedCostUSD:
+                      type: number
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: Runtime
+          type: string
+          jsonPath: .spec.runtimeRef.name
+        - name: Replicas
+          type: integer
+          jsonPath: .status.readyReplicas
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}

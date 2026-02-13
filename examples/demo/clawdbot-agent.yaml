@@ -1,0 +1,39 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: clawdbot
+  annotations:
+    agscale.io/usage-updated-at: "2026-02-13T00:00:00Z"
+    agscale.io/usage-requests-24h: "12000"
+    agscale.io/usage-tokens-24h: "2200000"
+    agscale.io/usage-cost-usd-24h: "28.50"
+spec:
+  runtimeRef:
+    name: python-fastapi-runtime
+  reliabilityPolicyRef:
+    name: default-reliability
+  budgetPolicyRef:
+    name: clawdbot-budget
+  skillResolutionPolicy: Strict
+  replicas: 2
+  llmEndpointRef:
+    name: shared-openai
+  memoryRefs:
+    - name: team-redis-memory
+  contextRefs:
+    - name: product-docs
+  skillRefs:
+    - name: web-search
+  image: ghcr.io/example/clawdbot:0.1.0
+  env:
+    - name: AGENT_PROFILE
+      value: clawdbot
+  service:
+    enabled: true
+    port: 80
+    targetPort: 8080
+    type: ClusterIP
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70

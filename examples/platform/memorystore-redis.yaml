@@ -1,0 +1,13 @@
+apiVersion: agscale.io/v1alpha1
+kind: MemoryStore
+metadata:
+  name: team-redis-memory
+spec:
+  type: redis
+  connection:
+    endpoint: redis.default.svc.cluster.local:6379
+    secretRef:
+      name: redis-auth
+  retention:
+    ttlSeconds: 604800
+    maxItemsPerAgent: 100000

@@ -1,0 +1,76 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: contextproviders.agscale.io
+spec:
+  group: agscale.io
+  scope: Namespaced
+  names:
+    plural: contextproviders
+    singular: contextprovider
+    kind: ContextProvider
+    shortNames:
+      - ctx
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - git
+                    - s3
+                    - http
+                    - kubernetes
+                    - vector-db
+                    - custom
+                refreshIntervalSeconds:
+                  type: integer
+                auth:
+                  type: object
+                  properties:
+                    secretRef:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                      required:
+                        - name
+                config:
+                  type: object
+                  additionalProperties:
+                    type: string
+              required:
+                - type
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                lastSyncTime:
+                  type: string
+                  format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: Type
+          type: string
+          jsonPath: .spec.type
+        - name: LastSync
+          type: date
+          jsonPath: .status.lastSyncTime
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}

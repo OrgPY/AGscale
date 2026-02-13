@@ -1,0 +1,11 @@
+{{- if and .Values.observability.enabled .Values.observability.otel.enabled .Values.observability.otel.collectorEndpoint }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agscale.fullname" . }}-otel
+  labels:
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  collector-endpoint: {{ .Values.observability.otel.collectorEndpoint | quote }}
+{{- end }}

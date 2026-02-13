@@ -1,0 +1,8 @@
+{{- if .Values.reliability.defaultPolicy.enabled }}
+apiVersion: agscale.io/v1alpha1
+kind: AgentReliabilityPolicy
+metadata:
+  name: {{ .Values.reliability.defaultPolicy.name }}
+spec:
+{{ toYaml .Values.reliability.defaultPolicy.spec | indent 2 }}
+{{- end }}

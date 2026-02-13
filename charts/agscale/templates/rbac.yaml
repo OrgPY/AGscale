@@ -1,0 +1,35 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agscale.fullname" . }}-manager-role
+rules:
+  - apiGroups: [""]
+    resources: ["events", "services", "pods", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["agscale.io"]
+    resources: ["agents", "agentruntimes", "llmendpoints", "memorystores", "contextproviders", "agentreliabilitypolicies", "agentskills", "skillregistries", "agentbudgetpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["agscale.io"]
+    resources: ["agents/status", "agentruntimes/status", "llmendpoints/status", "memorystores/status", "contextproviders/status", "agentreliabilitypolicies/status", "agentskills/status", "skillregistries/status", "agentbudgetpolicies/status"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "agscale.fullname" . }}-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "agscale.fullname" . }}-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agscale.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

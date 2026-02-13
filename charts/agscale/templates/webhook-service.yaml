@@ -1,0 +1,15 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agscale.fullname" . }}-webhook-service
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "agscale.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.webhook.service.port }}
+      targetPort: webhook
+      protocol: TCP
+      name: https
+{{- end }}
