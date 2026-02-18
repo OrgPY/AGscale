@@ -1,0 +1,20 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: moltbot
+spec:
+  runtimeRef:
+    name: opencode-official-runtime
+  image: openclaw/openclaw:latest
+  llmEndpointRef:
+    name: shared-opencode
+  env:
+    - name: AGENT_PROFILE
+      value: moltbot
+    - name: AGENT_MODE
+      value: opencode
+  service:
+    enabled: true
+    port: 80
+    targetPort: 18789
+    type: ClusterIP

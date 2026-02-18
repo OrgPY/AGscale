@@ -1,0 +1,148 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agentworkflows.agscale.io
+spec:
+  group: agscale.io
+  scope: Namespaced
+  names:
+    plural: agentworkflows
+    singular: agentworkflow
+    kind: AgentWorkflow
+    shortNames:
+      - awf
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                entryAgentRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                mode:
+                  type: string
+                  enum:
+                    - RequestResponse
+                    - Scheduled
+                    - EventDriven
+                steps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      agentRef:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                      dependsOn:
+                        type: array
+                        items:
+                          type: string
+                      protocol:
+                        type: string
+                        enum:
+                          - http
+                          - mcp
+                      endpointPath:
+                        type: string
+                      type:
+                        type: string
+                        enum:
+                          - Prompt
+                          - Retrieve
+                          - ToolCall
+                          - Transform
+                          - Route
+                      timeoutSeconds:
+                        type: integer
+                      retryPolicy:
+                        type: object
+                        properties:
+                          maxRetries:
+                            type: integer
+                          backoffSeconds:
+                            type: integer
+                routing:
+                  type: object
+                  properties:
+                    onSuccess:
+                      type: string
+                    onFailure:
+                      type: string
+                schedule:
+                  type: object
+                  properties:
+                    cron:
+                      type: string
+                eventSourceRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                policyRefs:
+                  type: object
+                  properties:
+                    reliabilityPolicyRef:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                    budgetPolicyRef:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                    toolPolicyRef:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                    dataGovernancePolicyRef:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                phase:
+                  type: string
+                lastRunTime:
+                  type: string
+                  format: date-time
+                lastRunID:
+                  type: string
+                runCount:
+                  type: integer
+                failureCount:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: Mode
+          type: string
+          jsonPath: .spec.mode
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}

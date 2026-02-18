@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: agscale-demo1
+resources:
+  - runtime.yaml
+  - llmendpoint-qwenplus.yaml
+  - agent.yaml

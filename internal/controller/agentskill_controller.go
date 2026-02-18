@@ -271,6 +271,14 @@ func applySkillDefaults(skill *agscalev1alpha1.AgentSkill) {
 	if skill.Spec.SyncPolicy.IntervalSeconds == 0 {
 		skill.Spec.SyncPolicy.IntervalSeconds = 300
 	}
+	if skill.Spec.Source != nil {
+		if skill.Spec.Source.Protocol == "" {
+			skill.Spec.Source.Protocol = "openapi-http"
+		}
+		if skill.Spec.Source.URL == "" && skill.Spec.Source.ExternalID != "" {
+			skill.Spec.Source.URL = "https://clawhub.ai/skills/" + skill.Spec.Source.ExternalID
+		}
+	}
 }
 
 func setSkillCondition(conditions *[]metav1.Condition, conditionType string, status metav1.ConditionStatus, reason, message string) {

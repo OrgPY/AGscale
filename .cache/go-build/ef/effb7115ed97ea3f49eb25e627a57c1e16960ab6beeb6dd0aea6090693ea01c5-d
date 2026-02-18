@@ -1,6 +1,0 @@
-./agent_controller.go
-./agentskill_controller.go
-./metrics.go
-./agent_controller_envtest_test.go
-./agentskill_controller_test.go
-./reliability_test.go

@@ -1,6 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - bases/agscale.io_agentworkflows.yaml
+  - bases/agscale.io_agentworkflowruns.yaml
+  - bases/agscale.io_integrationendpoints.yaml
+  - bases/agscale.io_eventsources.yaml
+  - bases/agscale.io_datagovernancepolicies.yaml
+  - bases/agscale.io_agenttoolpolicies.yaml
   - bases/agscale.io_agentbudgetpolicies.yaml
   - bases/agscale.io_skillregistries.yaml
   - bases/agscale.io_agentskills.yaml

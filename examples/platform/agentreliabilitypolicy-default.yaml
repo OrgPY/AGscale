@@ -7,10 +7,24 @@ spec:
     startupGraceSeconds: 120
     failureWindowSeconds: 300
     minReadyPercent: 80
+  dependencyChecks:
+    llm:
+      enabled: true
+      timeoutMs: 3000
+      consecutiveFailuresForOpen: 3
+    memory:
+      enabled: true
+      timeoutMs: 2000
+      consecutiveFailuresForOpen: 4
+    context:
+      enabled: true
+      timeoutMs: 2000
+      consecutiveFailuresForOpen: 4
   remediation:
     actions:
       - RestartPods
       - ScaleOut
+      - SwitchToBackupLLM
       - RollbackRevision
       - FailOpenReadOnly
     maxActionsPerHour: 6

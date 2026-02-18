@@ -4,6 +4,10 @@ IMG ?= ghcr.io/example/agscale-controller:latest
 build:
 	go build -o bin/manager main.go
 
+.PHONY: build-cli
+build-cli:
+	go build -o bin/agscale ./cmd/agscale
+
 .PHONY: run
 run:
 	go run ./main.go

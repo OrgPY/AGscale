@@ -1,0 +1,14 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: moltbot
+spec:
+  llmEndpointRef:
+    name: shared-openai
+  env:
+    - name: AGENT_PROFILE
+      value: moltbot
+    - name: AGENT_MODE
+      value: openai
+    - name: OPENAI_MODEL
+      value: gpt-4o-mini

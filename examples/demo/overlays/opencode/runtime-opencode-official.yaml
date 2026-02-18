@@ -1,0 +1,20 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: opencode-official-runtime
+spec:
+  image: openclaw/openclaw:latest
+  imagePullPolicy: IfNotPresent
+  ports:
+    - name: gateway
+      containerPort: 18789
+  readinessProbe:
+    tcpSocket:
+      port: 18789
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  livenessProbe:
+    tcpSocket:
+      port: 18789
+    initialDelaySeconds: 20
+    periodSeconds: 20

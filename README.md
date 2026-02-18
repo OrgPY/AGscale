@@ -2,6 +2,8 @@
 
 `agscale` is a Kubernetes-native framework for deploying and scaling AI agents using custom resources.
 
+Current project focus is OpenClaw (`openclaw`/`openClawd`) compatibility.
+
 It separates concerns into reusable platform objects:
 
 - `Agent`: Deploy and scale a containerized agent workload.
@@ -13,12 +15,15 @@ It separates concerns into reusable platform objects:
 - `SkillRegistry` (optional scaffold): Future centralized registry governance layer.
 - `AgentReliabilityPolicy`: Define SRE health thresholds and self-healing actions.
 - `AgentBudgetPolicy`: Define soft budget limits for request/token/cost usage.
+- `AgentToolPolicy`: Define tool/skill governance (allowlists, protocols, approval mode).
 
 ## Goals
 
 - Make agent deployment as simple as creating a few YAML resources.
 - Decouple runtime, model endpoint, memory, and context so teams can reuse them.
 - Support scale via HPA-style controls and clean status reporting.
+- Support runtime storage wiring via `volumes` and `volumeMounts` in runtime/agent specs.
+- Support secure env injection via `env.valueFrom` (e.g. `secretKeyRef`) in runtime/agent specs.
 
 ## Resource Model
 
@@ -39,7 +44,16 @@ kubectl apply -f examples/agents/
 Demo for two sample agents (`clawdbot`, `moltbot`):
 
 - Guide: `docs/demo-clawdbot-moltbot.md`
-- Manifests: `examples/demo/`
+- Full OpenClaw stack walkthrough: `docs/demo-openclaw-full-stack.md`
+- Minimal Direct Qwen (VectorEngine): `docs/demo-qwen-vectorengine-minimal.md`
+- Minimal OpenClaw Gateway + qwen-plus: `docs/demo-openclaw-minimal-qwenplus.md`
+- Direct Qwen mode needs only one secret: `qwen-api-key` (see direct minimal doc).
+- OpenCode BYO walkthrough: `docs/demo-opencode-byovalue.md`
+- Manifests: `examples/demo/base/` (default), `examples/demo/overlays/openclaw/` (optional), `examples/demo/overlays/opencode/` (optional, BYO endpoint), `examples/demo/overlays/moltbot-real/` (optional)
+- Real demo app source: `examples/demo/agent-app/`
+- Base demo now includes local `LLMEndpoint`, `MemoryStore`, and `ContextProvider` resources for full-stack composition.
+- Demo overlays focus on explicit provider selection (OpenClaw/OpenCode) and `moltbot-real`.
+- OpenClaw overlay uses official image `openclaw/openclaw:latest` (no local image build).
 
 ## Directory Layout
 
@@ -59,7 +73,9 @@ This repository now includes a Go operator scaffold with:
   - Resolves references to runtime/model/memory/context/skill resources.
   - Reconciles `Deployment`, optional `Service`, and optional `HPA`.
   - Applies reliability policy checks and self-healing remediation actions.
-  - Current concrete remediation actions: `RestartPods`, `ScaleOut`, `FailOpenReadOnly` (`TrafficDrain`/`RollbackRevision` are no-op placeholders in v1alpha1).
+  - Current concrete remediation actions: `RestartPods`, `ScaleOut`, `SwitchToBackupLLM`, `FailOpenReadOnly` (`TrafficDrain`/`RollbackRevision` are no-op placeholders in v1alpha1).
+  - Dependency circuit breaker support: repeated dependency failures can open a temporary circuit and pause aggressive retries.
+  - Backup LLM failover: set `metadata.annotations.agscale.io/backup-llm-endpoint` on `Agent` and include `SwitchToBackupLLM` in remediation actions.
   - Publishes `Agent.status` conditions, ready replica count, and remediation history.
 - `Agent` mutating/validating webhook:
   - Defaults replicas/service ports.
@@ -76,6 +92,8 @@ This repository now includes a Go operator scaffold with:
 - `spec.syncPolicy.mode`: `Snapshot` or `TrackLatest`
 - `spec.syncPolicy.intervalSeconds`: sync interval
 - `Agent.spec.skillResolutionPolicy`: `Strict` (default) or `BestEffort`
+
+Default skill hub for examples is `https://clawhub.ai/`.
 
 `SkillRegistry` exists as an optional scaffold CRD for future centralized governance; direct `AgentSkill.spec.source` is the primary path in v1.
 
@@ -97,6 +115,50 @@ Budget policy is soft-limit in v1alpha1:
 go mod tidy
 go run ./main.go
 ```
+
+## CLI
+
+Build:
+
+```bash
+make build-cli
+```
+
+Common commands:
+
+```bash
+./bin/agscale get agents -n default
+./bin/agscale doctor -n default
+./bin/agscale describe agent support-agent -n default
+./bin/agscale logs agent support-agent -n default --tail 100
+./bin/agscale apply -k examples/platform
+./bin/agscale team run support-team -n default
+./bin/agscale team graph support-team -n default
+./bin/agscale team status support-team-run-<timestamp> -n default
+./bin/agscale tui agent support-agent -n default
+./bin/agscale opencode template --base-url https://your-opencode-endpoint.example/v1 --model your-opencode-model
+```
+
+TUI notes:
+
+- `tui agent <name>` provides quick status, logs, chat, restart-pod, scale, and backup-LLM failover actions.
+- Chat uses `Agent.status.url` and defaults to `POST /chat`.
+- Override chat path with annotation `agscale.io/chat-path`.
+
+Workflow run notes:
+
+- `AgentWorkflow.spec.steps[*].dependsOn` enables DAG dependencies.
+- `AgentWorkflow.spec.steps[*].protocol` supports `http` or `mcp`.
+- `AgentWorkflow.spec.steps[*].endpointPath` can override default invoke path (`/invoke` or `/mcp/invoke`).
+- For HTTP workflow steps, controller tries `/invoke` then `/chat` by default for OpenClaw compatibility.
+- `AgentWorkflow.spec.policyRefs.toolPolicyRef` gates allowed protocols and optional human approval.
+- `AgentWorkflow.spec.policyRefs.budgetPolicyRef` blocks runs when budget status is `Exceeded`.
+- `AgentWorkflow.spec.policyRefs.dataGovernancePolicyRef` enforces destination allow-list and payload redaction.
+
+Event and integration notes:
+
+- `IntegrationEndpoint` controller performs health checks and updates readiness.
+- `EventSource` controller can trigger `AgentWorkflowRun` objects on interval (annotation `agscale.io/interval-seconds`).
 
 ## Run Tests
 
@@ -162,16 +224,26 @@ GitHub Actions workflow at `.github/workflows/ci.yaml` runs:
 
 Chart path: `charts/agscale`
 
-Install:
+Install (minimal mode, no cert-manager/Prometheus CRDs required):
 
 ```bash
-helm install agscale charts/agscale -n agscale-system --create-namespace
+helm upgrade --install agscale charts/agscale -n agscale-system --create-namespace \
+  --set webhook.enabled=false \
+  --set observability.enabled=false
 ```
 
-Upgrade:
+Install (full mode, requires cert-manager + Prometheus Operator CRDs):
 
 ```bash
-helm upgrade agscale charts/agscale -n agscale-system
+helm upgrade --install agscale charts/agscale -n agscale-system --create-namespace
+```
+
+Upgrade (minimal mode):
+
+```bash
+helm upgrade agscale charts/agscale -n agscale-system \
+  --set webhook.enabled=false \
+  --set observability.enabled=false
 ```
 
 Render locally:
@@ -190,3 +262,9 @@ The chart includes:
 - Webhook `Service`, mutating/validating webhook configurations
 - Optional cert-manager `Issuer` and `Certificate` (enabled by default)
 - CRDs under `charts/agscale/crds`
+
+Common install error:
+
+- If you see `no matches for kind "Certificate"/"Issuer"/"ServiceMonitor"/"PrometheusRule"`, either:
+  - install cert-manager and Prometheus Operator CRDs, or
+  - use minimal mode flags: `--set webhook.enabled=false --set observability.enabled=false`

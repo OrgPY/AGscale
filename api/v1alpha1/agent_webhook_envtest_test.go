@@ -110,6 +110,12 @@ func TestAgentWebhookDefaultAndValidate(t *testing.T) {
 	if _, err := bad.ValidateCreate(); err == nil {
 		t.Fatalf("expected runtime reference validation error")
 	}
+
+	badMount := agent.DeepCopy()
+	badMount.Spec.VolumeMounts = []corev1.VolumeMount{{Name: "missing-vol", MountPath: "/data"}}
+	if _, err := badMount.ValidateCreate(); err == nil {
+		t.Fatalf("expected volumeMount reference validation error")
+	}
 }
 
 func setupWebhookEnvtest(t *testing.T) (*envtest.Environment, client.Client) {

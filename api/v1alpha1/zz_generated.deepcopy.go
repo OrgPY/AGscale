@@ -90,6 +90,16 @@ func (in *AgentSpec) DeepCopyInto(out *AgentSpec) {
 			in.Env[i].DeepCopyInto(&out.Env[i])
 		}
 	}
+	if in.Volumes != nil {
+		out.Volumes = make([]corev1.Volume, len(in.Volumes))
+		for i := range in.Volumes {
+			in.Volumes[i].DeepCopyInto(&out.Volumes[i])
+		}
+	}
+	if in.VolumeMounts != nil {
+		out.VolumeMounts = make([]corev1.VolumeMount, len(in.VolumeMounts))
+		copy(out.VolumeMounts, in.VolumeMounts)
+	}
 	out.Resources = *in.Resources.DeepCopy()
 	if in.Autoscaling != nil {
 		out.Autoscaling = new(AgentAutoscalingSpec)
@@ -196,6 +206,16 @@ func (in *AgentRuntimeSpec) DeepCopyInto(out *AgentRuntimeSpec) {
 	if in.Ports != nil {
 		out.Ports = append([]corev1.ContainerPort(nil), in.Ports...)
 	}
+	if in.Volumes != nil {
+		out.Volumes = make([]corev1.Volume, len(in.Volumes))
+		for i := range in.Volumes {
+			in.Volumes[i].DeepCopyInto(&out.Volumes[i])
+		}
+	}
+	if in.VolumeMounts != nil {
+		out.VolumeMounts = make([]corev1.VolumeMount, len(in.VolumeMounts))
+		copy(out.VolumeMounts, in.VolumeMounts)
+	}
 	out.Resources = *in.Resources.DeepCopy()
 	if in.LivenessProbe != nil {
 		out.LivenessProbe = in.LivenessProbe.DeepCopy()
@@ -222,6 +242,84 @@ func (in *AgentRuntimeSpec) DeepCopyInto(out *AgentRuntimeSpec) {
 
 func (in *AgentRuntimeStatus) DeepCopyInto(out *AgentRuntimeStatus) {
 	*out = *in
+	if in.Conditions != nil {
+		out.Conditions = make([]metav1.Condition, len(in.Conditions))
+		for i := range in.Conditions {
+			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *AgentToolPolicy) DeepCopyInto(out *AgentToolPolicy) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *AgentToolPolicy) DeepCopy() *AgentToolPolicy {
+	if in == nil {
+		return nil
+	}
+	out := new(AgentToolPolicy)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AgentToolPolicy) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *AgentToolPolicyList) DeepCopyInto(out *AgentToolPolicyList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		out.Items = make([]AgentToolPolicy, len(in.Items))
+		for i := range in.Items {
+			in.Items[i].DeepCopyInto(&out.Items[i])
+		}
+	}
+}
+
+func (in *AgentToolPolicyList) DeepCopy() *AgentToolPolicyList {
+	if in == nil {
+		return nil
+	}
+	out := new(AgentToolPolicyList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AgentToolPolicyList) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *AgentToolPolicySpec) DeepCopyInto(out *AgentToolPolicySpec) {
+	*out = *in
+	if in.AgentSelector.Names != nil {
+		out.AgentSelector.Names = append([]string(nil), in.AgentSelector.Names...)
+	}
+	if in.AgentSelector.MatchLabels != nil {
+		out.AgentSelector.MatchLabels = make(map[string]string, len(in.AgentSelector.MatchLabels))
+		for k, v := range in.AgentSelector.MatchLabels {
+			out.AgentSelector.MatchLabels[k] = v
+		}
+	}
+	if in.AllowedSkillRefs != nil {
+		out.AllowedSkillRefs = append([]LocalObjectReference(nil), in.AllowedSkillRefs...)
+	}
+	if in.AllowedProtocols != nil {
+		out.AllowedProtocols = append([]string(nil), in.AllowedProtocols...)
+	}
+}
+
+func (in *AgentToolPolicyStatus) DeepCopyInto(out *AgentToolPolicyStatus) {
+	*out = *in
+	if in.LastViolationTime != nil {
+		out.LastViolationTime = in.LastViolationTime.DeepCopy()
+	}
 	if in.Conditions != nil {
 		out.Conditions = make([]metav1.Condition, len(in.Conditions))
 		for i := range in.Conditions {
@@ -773,6 +871,394 @@ func (in *AgentBudgetPolicyStatus) DeepCopyInto(out *AgentBudgetPolicyStatus) {
 		out.Conditions = make([]metav1.Condition, len(in.Conditions))
 		for i := range in.Conditions {
 			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *AgentWorkflow) DeepCopyInto(out *AgentWorkflow) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *AgentWorkflow) DeepCopy() *AgentWorkflow {
+	if in == nil {
+		return nil
+	}
+	out := new(AgentWorkflow)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AgentWorkflow) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *AgentWorkflowList) DeepCopyInto(out *AgentWorkflowList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		out.Items = make([]AgentWorkflow, len(in.Items))
+		for i := range in.Items {
+			in.Items[i].DeepCopyInto(&out.Items[i])
+		}
+	}
+}
+
+func (in *AgentWorkflowList) DeepCopy() *AgentWorkflowList {
+	if in == nil {
+		return nil
+	}
+	out := new(AgentWorkflowList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AgentWorkflowList) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *AgentWorkflowSpec) DeepCopyInto(out *AgentWorkflowSpec) {
+	*out = *in
+	if in.Steps != nil {
+		out.Steps = make([]WorkflowStepSpec, len(in.Steps))
+		for i := range in.Steps {
+			in.Steps[i].DeepCopyInto(&out.Steps[i])
+		}
+	}
+	if in.EventSourceRef != nil {
+		out.EventSourceRef = &LocalObjectReference{Name: in.EventSourceRef.Name}
+	}
+	if in.PolicyRefs.ReliabilityPolicyRef != nil {
+		out.PolicyRefs.ReliabilityPolicyRef = &LocalObjectReference{Name: in.PolicyRefs.ReliabilityPolicyRef.Name}
+	}
+	if in.PolicyRefs.BudgetPolicyRef != nil {
+		out.PolicyRefs.BudgetPolicyRef = &LocalObjectReference{Name: in.PolicyRefs.BudgetPolicyRef.Name}
+	}
+	if in.PolicyRefs.ToolPolicyRef != nil {
+		out.PolicyRefs.ToolPolicyRef = &LocalObjectReference{Name: in.PolicyRefs.ToolPolicyRef.Name}
+	}
+	if in.PolicyRefs.DataGovernancePolicyRef != nil {
+		out.PolicyRefs.DataGovernancePolicyRef = &LocalObjectReference{Name: in.PolicyRefs.DataGovernancePolicyRef.Name}
+	}
+}
+
+func (in *AgentWorkflowStatus) DeepCopyInto(out *AgentWorkflowStatus) {
+	*out = *in
+	if in.LastRunTime != nil {
+		out.LastRunTime = in.LastRunTime.DeepCopy()
+	}
+	if in.Conditions != nil {
+		out.Conditions = make([]metav1.Condition, len(in.Conditions))
+		for i := range in.Conditions {
+			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *WorkflowStepSpec) DeepCopyInto(out *WorkflowStepSpec) {
+	*out = *in
+	if in.AgentRef != nil {
+		out.AgentRef = &LocalObjectReference{Name: in.AgentRef.Name}
+	}
+	if in.DependsOn != nil {
+		out.DependsOn = append([]string(nil), in.DependsOn...)
+	}
+}
+
+func (in *AgentWorkflowRun) DeepCopyInto(out *AgentWorkflowRun) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *AgentWorkflowRun) DeepCopy() *AgentWorkflowRun {
+	if in == nil {
+		return nil
+	}
+	out := new(AgentWorkflowRun)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AgentWorkflowRun) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *AgentWorkflowRunList) DeepCopyInto(out *AgentWorkflowRunList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		out.Items = make([]AgentWorkflowRun, len(in.Items))
+		for i := range in.Items {
+			in.Items[i].DeepCopyInto(&out.Items[i])
+		}
+	}
+}
+
+func (in *AgentWorkflowRunList) DeepCopy() *AgentWorkflowRunList {
+	if in == nil {
+		return nil
+	}
+	out := new(AgentWorkflowRunList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *AgentWorkflowRunList) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *AgentWorkflowRunSpec) DeepCopyInto(out *AgentWorkflowRunSpec) {
+	*out = *in
+	if in.InputRef != nil {
+		out.InputRef = &LocalObjectReference{Name: in.InputRef.Name}
+	}
+}
+
+func (in *AgentWorkflowRunStatus) DeepCopyInto(out *AgentWorkflowRunStatus) {
+	*out = *in
+	if in.StartedAt != nil {
+		out.StartedAt = in.StartedAt.DeepCopy()
+	}
+	if in.CompletedAt != nil {
+		out.CompletedAt = in.CompletedAt.DeepCopy()
+	}
+	if in.StepResults != nil {
+		out.StepResults = make([]WorkflowRunStepResult, len(in.StepResults))
+		copy(out.StepResults, in.StepResults)
+	}
+	if in.OutputRef != nil {
+		out.OutputRef = &LocalObjectReference{Name: in.OutputRef.Name}
+	}
+	if in.PolicyDecisions != nil {
+		out.PolicyDecisions = make([]WorkflowRunPolicyDecision, len(in.PolicyDecisions))
+		copy(out.PolicyDecisions, in.PolicyDecisions)
+	}
+	if in.Conditions != nil {
+		out.Conditions = make([]metav1.Condition, len(in.Conditions))
+		for i := range in.Conditions {
+			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *DataGovernancePolicy) DeepCopyInto(out *DataGovernancePolicy) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *DataGovernancePolicy) DeepCopy() *DataGovernancePolicy {
+	if in == nil {
+		return nil
+	}
+	out := new(DataGovernancePolicy)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *DataGovernancePolicy) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *DataGovernancePolicyList) DeepCopyInto(out *DataGovernancePolicyList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		out.Items = make([]DataGovernancePolicy, len(in.Items))
+		for i := range in.Items {
+			in.Items[i].DeepCopyInto(&out.Items[i])
+		}
+	}
+}
+
+func (in *DataGovernancePolicyList) DeepCopy() *DataGovernancePolicyList {
+	if in == nil {
+		return nil
+	}
+	out := new(DataGovernancePolicyList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *DataGovernancePolicyList) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *DataGovernancePolicySpec) DeepCopyInto(out *DataGovernancePolicySpec) {
+	*out = *in
+	if in.PIIRedaction != nil {
+		out.PIIRedaction = append([]string(nil), in.PIIRedaction...)
+	}
+	if in.AllowedDestinations != nil {
+		out.AllowedDestinations = append([]string(nil), in.AllowedDestinations...)
+	}
+	if in.ForbiddenFields != nil {
+		out.ForbiddenFields = append([]string(nil), in.ForbiddenFields...)
+	}
+}
+
+func (in *DataGovernancePolicyStatus) DeepCopyInto(out *DataGovernancePolicyStatus) {
+	*out = *in
+	if in.Conditions != nil {
+		out.Conditions = make([]metav1.Condition, len(in.Conditions))
+		for i := range in.Conditions {
+			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *EventSource) DeepCopyInto(out *EventSource) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	out.Spec = in.Spec
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *EventSource) DeepCopy() *EventSource {
+	if in == nil {
+		return nil
+	}
+	out := new(EventSource)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *EventSource) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *EventSourceList) DeepCopyInto(out *EventSourceList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		out.Items = make([]EventSource, len(in.Items))
+		for i := range in.Items {
+			in.Items[i].DeepCopyInto(&out.Items[i])
+		}
+	}
+}
+
+func (in *EventSourceList) DeepCopy() *EventSourceList {
+	if in == nil {
+		return nil
+	}
+	out := new(EventSourceList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *EventSourceList) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *EventSourceStatus) DeepCopyInto(out *EventSourceStatus) {
+	*out = *in
+	if in.LastEventTime != nil {
+		out.LastEventTime = in.LastEventTime.DeepCopy()
+	}
+	if in.Conditions != nil {
+		out.Conditions = make([]metav1.Condition, len(in.Conditions))
+		for i := range in.Conditions {
+			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *IntegrationEndpoint) DeepCopyInto(out *IntegrationEndpoint) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.Spec.DeepCopyInto(&out.Spec)
+	in.Status.DeepCopyInto(&out.Status)
+}
+
+func (in *IntegrationEndpoint) DeepCopy() *IntegrationEndpoint {
+	if in == nil {
+		return nil
+	}
+	out := new(IntegrationEndpoint)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *IntegrationEndpoint) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *IntegrationEndpointList) DeepCopyInto(out *IntegrationEndpointList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		out.Items = make([]IntegrationEndpoint, len(in.Items))
+		for i := range in.Items {
+			in.Items[i].DeepCopyInto(&out.Items[i])
+		}
+	}
+}
+
+func (in *IntegrationEndpointList) DeepCopy() *IntegrationEndpointList {
+	if in == nil {
+		return nil
+	}
+	out := new(IntegrationEndpointList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *IntegrationEndpointList) DeepCopyObject() runtime.Object {
+	return in.DeepCopy()
+}
+
+func (in *IntegrationEndpointSpec) DeepCopyInto(out *IntegrationEndpointSpec) {
+	*out = *in
+	in.Connection.DeepCopyInto(&out.Connection)
+	if in.Capabilities != nil {
+		out.Capabilities = append([]string(nil), in.Capabilities...)
+	}
+}
+
+func (in *IntegrationEndpointStatus) DeepCopyInto(out *IntegrationEndpointStatus) {
+	*out = *in
+	if in.LastHealthCheckTime != nil {
+		out.LastHealthCheckTime = in.LastHealthCheckTime.DeepCopy()
+	}
+	if in.Conditions != nil {
+		out.Conditions = make([]metav1.Condition, len(in.Conditions))
+		for i := range in.Conditions {
+			in.Conditions[i].DeepCopyInto(&out.Conditions[i])
+		}
+	}
+}
+
+func (in *IntegrationConnection) DeepCopyInto(out *IntegrationConnection) {
+	*out = *in
+	if in.Auth.SecretRef != nil {
+		out.Auth.SecretRef = &SecretKeyReference{
+			Name: in.Auth.SecretRef.Name,
+			Key:  in.Auth.SecretRef.Key,
+		}
+	}
+	if in.TLS.CASecretRef != nil {
+		out.TLS.CASecretRef = &LocalObjectReference{Name: in.TLS.CASecretRef.Name}
+	}
+	if in.Headers != nil {
+		out.Headers = make(map[string]string, len(in.Headers))
+		for k, v := range in.Headers {
+			out.Headers[k] = v
 		}
 	}
 }

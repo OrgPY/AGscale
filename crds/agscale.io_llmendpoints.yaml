@@ -31,6 +31,10 @@ spec:
                     - bedrock
                     - vllm
                     - ollama
+                    - openclaw
+                    - qwen
+                    - deepseek
+                    - opencode
                     - custom
                 baseURL:
                   type: string

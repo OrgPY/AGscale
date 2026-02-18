@@ -1,0 +1,13 @@
+apiVersion: agscale.io/v1alpha1
+kind: LLMEndpoint
+metadata:
+  name: shared-opencode
+spec:
+  provider: opencode
+  baseURL: https://your-opencode-endpoint.example/v1
+  defaultModel: your-opencode-model
+  auth:
+    secretRef:
+      name: opencode-api-key
+      key: apiKey
+  timeoutSeconds: 30

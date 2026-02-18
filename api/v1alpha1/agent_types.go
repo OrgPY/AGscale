@@ -50,6 +50,8 @@ type AgentSpec struct {
 	Command               []string                    `json:"command,omitempty"`
 	Args                  []string                    `json:"args,omitempty"`
 	Env                   []corev1.EnvVar             `json:"env,omitempty"`
+	Volumes               []corev1.Volume             `json:"volumes,omitempty"`
+	VolumeMounts          []corev1.VolumeMount        `json:"volumeMounts,omitempty"`
 	Resources             corev1.ResourceRequirements `json:"resources,omitempty"`
 	Service               AgentServiceSpec            `json:"service,omitempty"`
 	Autoscaling           *AgentAutoscalingSpec       `json:"autoscaling,omitempty"`

@@ -1,0 +1,14 @@
+apiVersion: agscale.io/v1alpha1
+kind: LLMEndpoint
+metadata:
+  name: shared-qwen
+spec:
+  provider: qwen
+  # baseURL: https://dashscope.aliyuncs.com/compatible-mode/v1
+  baseURL: https://api.vectorengine.ai/v1
+  defaultModel: qwen-plus
+  auth:
+    secretRef:
+      name: qwen-api-key
+      key: apiKey
+  timeoutSeconds: 30

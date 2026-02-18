@@ -1,0 +1,10 @@
+apiVersion: agscale.io/v1alpha1
+kind: ContextProvider
+metadata:
+  name: local-context
+spec:
+  type: filesystem
+  refreshIntervalSeconds: 60
+  config:
+    rootPath: /data/context
+    mode: readonly

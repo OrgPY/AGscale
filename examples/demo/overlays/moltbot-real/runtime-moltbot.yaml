@@ -1,0 +1,52 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: demo-moltbot-runtime
+spec:
+  image: openclaw/openclaw:latest
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  env:
+    - name: CLAWDBOT_GATEWAY_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: moltbot-gateway
+          key: token
+    - name: MOLTBOT_CONFIG_PATH
+      value: /etc/moltbot/application.yaml
+  ports:
+    - name: gateway
+      containerPort: 18789
+    - name: control
+      containerPort: 18790
+  volumes:
+    - name: moltbot-state
+      emptyDir: {}
+    - name: moltbot-config
+      configMap:
+        name: moltbot-config
+        items:
+          - key: application.yaml
+            path: application.yaml
+  volumeMounts:
+    - name: moltbot-state
+      mountPath: /data
+    - name: moltbot-config
+      mountPath: /etc/moltbot
+      readOnly: true
+  readinessProbe:
+    tcpSocket:
+      port: 18789
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  livenessProbe:
+    tcpSocket:
+      port: 18789
+    initialDelaySeconds: 20
+    periodSeconds: 20

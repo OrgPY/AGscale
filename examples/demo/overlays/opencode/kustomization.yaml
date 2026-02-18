@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - llmendpoint-opencode.yaml
+  - runtime-opencode-official.yaml
+configMapGenerator:
+  - name: opencode-demo-config
+    envs:
+      - opencode-user-config.env
+generatorOptions:
+  disableNameSuffixHash: true
+replacements:
+  - source:
+      kind: ConfigMap
+      name: opencode-demo-config
+      fieldPath: data.OPENCODE_BASE_URL
+    targets:
+      - select:
+          group: agscale.io
+          version: v1alpha1
+          kind: LLMEndpoint
+          name: shared-opencode
+        fieldPaths:
+          - spec.baseURL
+  - source:
+      kind: ConfigMap
+      name: opencode-demo-config
+      fieldPath: data.OPENCODE_MODEL
+    targets:
+      - select:
+          group: agscale.io
+          version: v1alpha1
+          kind: LLMEndpoint
+          name: shared-opencode
+        fieldPaths:
+          - spec.defaultModel
+patches:
+  - path: patch-agent-clawdbot-opencode.yaml
+    target:
+      group: agscale.io
+      version: v1alpha1
+      kind: Agent
+      name: clawdbot
+  - path: patch-agent-moltbot-opencode.yaml
+    target:
+      group: agscale.io
+      version: v1alpha1
+      kind: Agent
+      name: moltbot

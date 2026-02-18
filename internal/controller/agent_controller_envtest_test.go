@@ -119,6 +119,25 @@ func TestAgentReconcileCreatesWorkloads(t *testing.T) {
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, &deployFound); err != nil {
 		t.Fatalf("deployment not found: %v", err)
 	}
+	if len(deployFound.Spec.Template.Spec.Containers) != 1 {
+		t.Fatalf("expected single container, got %d", len(deployFound.Spec.Template.Spec.Containers))
+	}
+	var foundLLMAPIKey bool
+	for _, e := range deployFound.Spec.Template.Spec.Containers[0].Env {
+		if e.Name != "AGSCALE_LLM_API_KEY" {
+			continue
+		}
+		if e.ValueFrom == nil || e.ValueFrom.SecretKeyRef == nil {
+			t.Fatalf("AGSCALE_LLM_API_KEY must use secretKeyRef")
+		}
+		if e.ValueFrom.SecretKeyRef.Name != "openai" || e.ValueFrom.SecretKeyRef.Key != "apiKey" {
+			t.Fatalf("unexpected AGSCALE_LLM_API_KEY secret reference: %+v", e.ValueFrom.SecretKeyRef)
+		}
+		foundLLMAPIKey = true
+	}
+	if !foundLLMAPIKey {
+		t.Fatalf("expected AGSCALE_LLM_API_KEY env var to be injected")
+	}
 
 	var serviceFound corev1.Service
 	if err := k8sClient.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, &serviceFound); err != nil {

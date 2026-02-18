@@ -38,11 +38,7 @@ spec:
                   type: array
                   items:
                     type: object
-                    properties:
-                      name:
-                        type: string
-                      value:
-                        type: string
+                    x-kubernetes-preserve-unknown-fields: true
                 ports:
                   type: array
                   items:
@@ -52,6 +48,16 @@ spec:
                         type: string
                       containerPort:
                         type: integer
+                volumes:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                volumeMounts:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 resources:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

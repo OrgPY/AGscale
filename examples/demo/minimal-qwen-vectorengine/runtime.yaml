@@ -1,0 +1,30 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentRuntime
+metadata:
+  name: qwen-runtime-minimal
+spec:
+  image: agscale/demo-agent:0.1.0
+  imagePullPolicy: IfNotPresent
+  command:
+    - uvicorn
+  args:
+    - app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - "8080"
+  ports:
+    - name: http
+      containerPort: 8080
+  readinessProbe:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 20

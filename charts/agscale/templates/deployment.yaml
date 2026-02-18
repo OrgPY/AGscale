@@ -28,10 +28,15 @@ spec:
             {{- if .Values.leaderElection }}
             - --leader-elect
             {{- end }}
+            - --webhook-enabled={{ .Values.webhook.enabled }}
+            {{- if .Values.webhook.enabled }}
             - --webhook-port=9443
+            {{- end }}
           ports:
+            {{- if .Values.webhook.enabled }}
             - name: webhook
               containerPort: 9443
+            {{- end }}
             - name: metrics
               containerPort: 8080
             - name: probes

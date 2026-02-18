@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - llmendpoint-openclaw.yaml
+  - runtime-openclaw-official.yaml
+patches:
+  - path: patch-agent-clawdbot-openclaw.yaml
+    target:
+      group: agscale.io
+      version: v1alpha1
+      kind: Agent
+      name: clawdbot
+  - path: patch-agent-moltbot-openclaw.yaml
+    target:
+      group: agscale.io
+      version: v1alpha1
+      kind: Agent
+      name: moltbot

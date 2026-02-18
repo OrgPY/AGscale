@@ -14,10 +14,10 @@ rules:
     resources: ["horizontalpodautoscalers"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["agscale.io"]
-    resources: ["agents", "agentruntimes", "llmendpoints", "memorystores", "contextproviders", "agentreliabilitypolicies", "agentskills", "skillregistries", "agentbudgetpolicies"]
+    resources: ["agents", "agentruntimes", "llmendpoints", "memorystores", "contextproviders", "agentreliabilitypolicies", "agentskills", "skillregistries", "agentbudgetpolicies", "agenttoolpolicies", "agentworkflows", "agentworkflowruns", "integrationendpoints", "eventsources", "datagovernancepolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["agscale.io"]
-    resources: ["agents/status", "agentruntimes/status", "llmendpoints/status", "memorystores/status", "contextproviders/status", "agentreliabilitypolicies/status", "agentskills/status", "skillregistries/status", "agentbudgetpolicies/status"]
+    resources: ["agents/status", "agentruntimes/status", "llmendpoints/status", "memorystores/status", "contextproviders/status", "agentreliabilitypolicies/status", "agentskills/status", "skillregistries/status", "agentbudgetpolicies/status", "agenttoolpolicies/status", "agentworkflows/status", "agentworkflowruns/status", "integrationendpoints/status", "eventsources/status", "datagovernancepolicies/status"]
     verbs: ["get", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

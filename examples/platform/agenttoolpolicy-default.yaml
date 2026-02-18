@@ -1,0 +1,15 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentToolPolicy
+metadata:
+  name: default-tool-policy
+spec:
+  agentSelector:
+    names:
+      - support-agent
+  allowedSkillRefs:
+    - name: web-search
+  allowedProtocols:
+    - openapi-http
+    - mcp
+  approvalMode: Auto
+  maxCallsPerMinute: 120

@@ -1,0 +1,13 @@
+apiVersion: agscale.io/v1alpha1
+kind: LLMEndpoint
+metadata:
+  name: shared-openclaw
+spec:
+  provider: openclaw
+  baseURL: https://api.openclaw.ai/v1
+  defaultModel: openclaw-default
+  auth:
+    secretRef:
+      name: openclaw-api-key
+      key: apiKey
+  timeoutSeconds: 30

@@ -1,64 +1,64 @@
-# Demo Deployment Guide: clawdbot + moltbot
+# Demo Deployment Guide: clawdbot + moltbot (Official Images)
 
-This guide deploys two sample agents (`clawdbot`, `moltbot`) on AGScale with reliability and budget policies.
+This demo deploys two agent services (`clawdbot`, `moltbot`) using official runtime images.
 
-## What this validates
+No local image build is required; official image overlays are provided.
 
-- `Agent` reconciliation to `Deployment` + `Service` + optional `HPA`
-- `AgentSkill` reference injection
-- `AgentBudgetPolicy` soft-limit evaluation and status projection
-- Built-in alert rules present (inactive by default unless activated in Helm values)
+## Profiles
+
+- Base profile (default): official runtime with local memory/context/skill objects
+- OpenClaw overlay (optional): official OpenClaw image (`openclaw/openclaw:latest`)
+- OpenCode overlay (optional): BYO OpenCode endpoint/model on official runtime
+- Moltbot-real overlay (optional): switches only `moltbot` to the official `openclaw/openclaw` runtime
 
 ## Prerequisites
 
 - Kubernetes cluster reachable from your shell
 - AGScale controller deployed
 - AGScale CRDs installed
-- Secrets created in `default` namespace:
 
 ```bash
-kubectl -n default create secret generic openai-api-key --from-literal=apiKey='<your-openai-key>'
-kubectl -n default create secret generic redis-auth --from-literal=password='<redis-password>'
-kubectl -n default create secret generic git-access-token --from-literal=token='<git-token>'
+kubectl apply -k crds
 ```
 
-## 1) Deploy demo resources
+## 1) Deploy base demo (immediate runnable)
 
 ```bash
 kubectl apply -k examples/demo
 ```
 
-This applies:
+This applies `examples/demo/base` and creates:
 
-- Shared platform objects from `examples/platform/*`
-- Agents: `clawdbot`, `moltbot`
-- Agent budgets: `clawdbot-budget`, `moltbot-budget`
+- `AgentRuntime/demo-real-agent-runtime` (official image `openclaw/openclaw:latest`)
+- `AgentReliabilityPolicy/default-reliability`
+- `Deployment/Service demo-httpbin` (local tool backend)
+- `LLMEndpoint/local-ollama-endpoint` (local endpoint contract)
+- `MemoryStore/local-memory` (local memory layer)
+- `ContextProvider/local-context` (local context layer)
+- `AgentSkill/httpbin-tool` (manual local skill)
+- `Agent/clawdbot` + `Agent/moltbot`
+- Budget policies (`default-namespace-budget`, `clawdbot-budget`, `moltbot-budget`)
 
-## 2) Verify controller results
+## 2) Verify rollout
 
 ```bash
 kubectl get agents
-kubectl get deploy,svc,hpa | grep -E 'clawdbot|moltbot'
+kubectl get deploy,svc,hpa | grep -E 'clawdbot|moltbot|demo-httpbin'
+kubectl get agentskills
+kubectl get llmendpoints,memorystores,contextproviders
 kubectl get agentbudgetpolicies
 ```
 
-Check status projection:
+## 3) Verify pod health and logs
 
 ```bash
-kubectl get agent clawdbot -o jsonpath='{.status.budgetPhase}{"\n"}'
-kubectl get agent moltbot -o jsonpath='{.status.budgetPhase}{"\n"}'
+kubectl get pods -l app.kubernetes.io/instance=clawdbot
+kubectl get pods -l app.kubernetes.io/instance=moltbot
+kubectl logs deploy/clawdbot --tail=100
+kubectl logs deploy/moltbot --tail=100
 ```
 
-Check policy status:
-
-```bash
-kubectl get agentbudgetpolicy clawdbot-budget -o yaml
-kubectl get agentbudgetpolicy moltbot-budget -o yaml
-```
-
-## 3) Trigger a budget warning (soft-limit)
-
-Patch clawdbot usage above budget:
+## 4) Trigger budget exceeded (soft-limit)
 
 ```bash
 kubectl annotate agent clawdbot \
@@ -67,34 +67,91 @@ kubectl annotate agent clawdbot \
   --overwrite
 ```
 
-Then verify:
+After ~60s:
 
 ```bash
 kubectl get agent clawdbot -o jsonpath='{.status.budgetPhase}{" "}{.status.budgetReason}{"\n"}'
 kubectl get events --field-selector involvedObject.kind=Agent,involvedObject.name=clawdbot
 ```
 
-Expected: `budgetPhase=Exceeded` with warning event; workload remains running (soft-limit behavior).
+Expected:
 
-## 4) Optional: activate built-in budget alerts
+- `budgetPhase=Exceeded`
+- warning event emitted
+- pod remains running (soft-limit)
 
-By default alert expressions are `vector(0)` (installed, inactive).
-Activate globally or per-rule in Helm values:
+## 5) Optional OpenClaw overlay (official image)
 
-- `observability.alerting.active=true`, or
-- `observability.alerting.rules.budget_exceeded.active=true`
-- `observability.alerting.rules.budget_telemetry_stale.active=true`
-
-## 5) Cleanup
+Create secret:
 
 ```bash
-kubectl delete -k examples/demo
+kubectl -n default create secret generic openclaw-api-key \
+  --from-literal=apiKey='<YOUR_OPENCLAW_API_KEY>'
 ```
 
-## Notes
+Apply overlay:
 
-- Demo images are placeholders:
-  - `ghcr.io/example/clawdbot:0.1.0`
-  - `ghcr.io/example/moltbot:0.1.0`
-  Replace with your real images before running in a real cluster.
-- If your cluster does not have `redis.default.svc.cluster.local:6379`, update `examples/platform/memorystore-redis.yaml`.
+```bash
+kubectl apply -k examples/demo/overlays/openclaw
+```
+
+This overlay uses the official image `openclaw/openclaw:latest` for both demo agents, so no local image build is needed for OpenClaw mode.
+
+Verify runtime wiring:
+
+```bash
+kubectl get pod -l app.kubernetes.io/instance=clawdbot -o yaml | rg 'image:|containerPort: 18789'
+kubectl get pod -l app.kubernetes.io/instance=moltbot -o yaml | rg 'image:|containerPort: 18789'
+```
+
+## 5b) Optional OpenCode overlay (BYO endpoint)
+
+OpenCode setup is documented in `docs/demo-opencode-byovalue.md`.
+
+## 6) Optional real Moltbot overlay
+
+This overlay keeps default `clawdbot` behavior and switches only `moltbot` to a runtime with:
+
+- gateway token from Kubernetes Secret
+- local ephemeral state at `/data` (`emptyDir`)
+- mounted config file from ConfigMap
+
+Set your gateway token in the Secret manifest:
+
+```bash
+TOKEN="$(openssl rand -base64 32 | tr -d '\n')"
+sed -i.bak "s/replace-with-secure-token/${TOKEN}/" examples/demo/overlays/moltbot-real/moltbot-gateway-secret.yaml
+```
+
+Apply overlay:
+
+```bash
+kubectl apply -k examples/demo/overlays/moltbot-real
+```
+
+Verify:
+
+```bash
+kubectl get agent moltbot -o yaml | rg "runtimeRef|readyReplicas|conditions"
+kubectl get deploy,svc,secret,configmap | grep moltbot
+kubectl get pod -l app.kubernetes.io/instance=moltbot -o yaml | rg "/data|/etc/moltbot|CLAWDBOT_GATEWAY_TOKEN"
+```
+
+Notes:
+
+- This overlay uses `AgentRuntime.spec.volumes` + `volumeMounts` with `emptyDir` and config map mount.
+- `env.valueFrom.secretKeyRef` is supported for secure runtime env injection.
+- If you later revert to base profile:
+
+```bash
+kubectl apply -k examples/demo/base
+```
+
+## 7) Cleanup
+
+```bash
+kubectl delete -k examples/demo/overlays/moltbot-real --ignore-not-found
+kubectl delete -k examples/demo/overlays/opencode --ignore-not-found
+kubectl delete -k examples/demo/overlays/openclaw --ignore-not-found
+kubectl delete -k examples/demo
+```

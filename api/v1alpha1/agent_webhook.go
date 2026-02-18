@@ -166,6 +166,9 @@ func validateReferences(ctx context.Context, c client.Reader, a *Agent) error {
 	if err := c.Get(ctx, client.ObjectKey{Namespace: a.Namespace, Name: a.Spec.RuntimeRef.Name}, &runtimeObj); err != nil {
 		return fmt.Errorf("runtimeRef %q not resolvable: %w", a.Spec.RuntimeRef.Name, err)
 	}
+	if err := validateVolumeMountRefs(a, &runtimeObj); err != nil {
+		return err
+	}
 
 	if a.Spec.LLMEndpointRef != nil && a.Spec.LLMEndpointRef.Name != "" {
 		var llm LLMEndpoint
@@ -214,6 +217,40 @@ func validateReferences(ctx context.Context, c client.Reader, a *Agent) error {
 		}
 	}
 
+	return nil
+}
+
+func validateVolumeMountRefs(agent *Agent, runtimeObj *AgentRuntime) error {
+	volumeNames := map[string]struct{}{}
+	for _, v := range runtimeObj.Spec.Volumes {
+		if v.Name != "" {
+			volumeNames[v.Name] = struct{}{}
+		}
+	}
+	for _, v := range agent.Spec.Volumes {
+		if v.Name != "" {
+			volumeNames[v.Name] = struct{}{}
+		}
+	}
+	if len(agent.Spec.VolumeMounts) == 0 && len(runtimeObj.Spec.VolumeMounts) == 0 {
+		return nil
+	}
+	for _, m := range runtimeObj.Spec.VolumeMounts {
+		if m.Name == "" {
+			return fmt.Errorf("runtime volumeMount has empty name")
+		}
+		if _, ok := volumeNames[m.Name]; !ok {
+			return fmt.Errorf("runtime volumeMount %q does not match any declared volume", m.Name)
+		}
+	}
+	for _, m := range agent.Spec.VolumeMounts {
+		if m.Name == "" {
+			return fmt.Errorf("agent volumeMount has empty name")
+		}
+		if _, ok := volumeNames[m.Name]; !ok {
+			return fmt.Errorf("agent volumeMount %q does not match any declared volume", m.Name)
+		}
+	}
 	return nil
 }
 

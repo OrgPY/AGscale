@@ -1,0 +1,13 @@
+apiVersion: agscale.io/v1alpha1
+kind: LLMEndpoint
+metadata:
+  name: shared-openclaw-backup
+spec:
+  provider: openclaw
+  baseURL: https://backup.api.openclaw.ai/v1
+  defaultModel: openclaw-default
+  auth:
+    secretRef:
+      name: openclaw-backup-api-key
+      key: apiKey
+  timeoutSeconds: 30

@@ -1,0 +1,11 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentSkill
+metadata:
+  name: httpbin-tool
+spec:
+  type: http-tool
+  description: Local demo tool endpoint
+  endpoint: http://demo-httpbin.default.svc.cluster.local
+  config:
+    method: GET
+    path: /get

@@ -1,0 +1,13 @@
+apiVersion: agscale.io/v1alpha1
+kind: LLMEndpoint
+metadata:
+  name: shared-deepseek
+spec:
+  provider: deepseek
+  baseURL: https://api.deepseek.com/v1
+  defaultModel: deepseek-chat
+  auth:
+    secretRef:
+      name: deepseek-api-key
+      key: apiKey
+  timeoutSeconds: 30

@@ -1,0 +1,20 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: moltbot
+spec:
+  runtimeRef:
+    name: demo-moltbot-runtime
+  image: openclaw/openclaw:latest
+  env:
+    - name: AGENT_PROFILE
+      value: moltbot
+  service:
+    enabled: true
+    port: 80
+    targetPort: 18789
+    type: ClusterIP
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 1
+    targetCPUUtilizationPercentage: 70

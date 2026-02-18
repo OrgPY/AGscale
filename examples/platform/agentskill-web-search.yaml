@@ -5,7 +5,7 @@ metadata:
 spec:
   source:
     protocol: openapi-http
-    url: https://public-skillhub.example.com/skills/web-search
+    url: https://clawhub.ai/skills/web-search
     externalID: web-search
   syncPolicy:
     mode: Snapshot

@@ -1,0 +1,11 @@
+apiVersion: agscale.io/v1alpha1
+kind: IntegrationEndpoint
+metadata:
+  name: support-team-integration
+spec:
+  type: webhook
+  connection:
+    url: https://example.com/health
+    timeoutSeconds: 5
+  capabilities:
+    - healthcheck

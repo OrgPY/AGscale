@@ -1,10 +1,10 @@
 apiVersion: agscale.io/v1alpha1
 kind: SkillRegistry
 metadata:
-  name: public-skills
+  name: clawhub
 spec:
   protocol: openapi-http
-  baseURL: https://public-skillhub.example.com
+  baseURL: https://clawhub.ai/
   sync:
     enabled: true
     intervalSeconds: 300

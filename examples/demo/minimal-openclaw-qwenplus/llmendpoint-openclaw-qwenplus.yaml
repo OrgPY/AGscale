@@ -1,0 +1,14 @@
+apiVersion: agscale.io/v1alpha1
+kind: LLMEndpoint
+metadata:
+  name: openclaw-qwenplus
+spec:
+  provider: openclaw
+  # Template value: replace with your real OpenClaw gateway endpoint if different.
+  baseURL: http://openclaw-gateway.default.svc.cluster.local:8080/v1
+  defaultModel: qwen-plus
+  auth:
+    secretRef:
+      name: openclaw-api-key
+      key: apiKey
+  timeoutSeconds: 30

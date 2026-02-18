@@ -94,11 +94,17 @@ spec:
                   type: array
                   items:
                     type: object
-                    properties:
-                      name:
-                        type: string
-                      value:
-                        type: string
+                    x-kubernetes-preserve-unknown-fields: true
+                volumes:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                volumeMounts:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                 resources:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

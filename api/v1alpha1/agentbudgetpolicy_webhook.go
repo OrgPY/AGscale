@@ -115,14 +115,14 @@ func (r *AgentBudgetPolicy) validate() error {
 	if r.Spec.Limits.MaxEstimatedCostUSD24h != nil && *r.Spec.Limits.MaxEstimatedCostUSD24h < 0 {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "limits", "maxEstimatedCostUSD24h"), *r.Spec.Limits.MaxEstimatedCostUSD24h, "must be >= 0"))
 	}
-	allowedProviderTypes := []string{"openai", "mcp"}
+	allowedProviderTypes := []string{"openai", "openclaw", "opencode", "mcp"}
 	for i, p := range r.Spec.UsageSources.Providers {
 		if p.Type == "" {
 			allErrs = append(allErrs, field.Required(field.NewPath("spec", "usageSources", "providers").Index(i).Child("type"), "must be set"))
 			continue
 		}
 		if !slices.Contains(allowedProviderTypes, p.Type) {
-			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "usageSources", "providers").Index(i).Child("type"), p.Type, "must be one of openai,mcp"))
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec", "usageSources", "providers").Index(i).Child("type"), p.Type, "must be one of openai,openclaw,opencode,mcp"))
 		}
 	}
 	if len(allErrs) == 0 {

@@ -1,0 +1,14 @@
+apiVersion: agscale.io/v1alpha1
+kind: Agent
+metadata:
+  name: clawdbot
+spec:
+  llmEndpointRef:
+    name: shared-deepseek
+  env:
+    - name: AGENT_PROFILE
+      value: clawdbot
+    - name: AGENT_MODE
+      value: openai
+    - name: OPENAI_MODEL
+      value: deepseek-chat

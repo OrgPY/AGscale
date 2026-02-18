@@ -1,0 +1,14 @@
+apiVersion: agscale.io/v1alpha1
+kind: EventSource
+metadata:
+  name: support-team-events
+  annotations:
+    agscale.io/interval-seconds: "120"
+spec:
+  integrationRef:
+    name: support-team-integration
+  topic: support.ticket.created
+  delivery:
+    mode: Polling
+  targetWorkflowRef:
+    name: support-team

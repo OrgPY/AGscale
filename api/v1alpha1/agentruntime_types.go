@@ -12,6 +12,8 @@ type AgentRuntimeSpec struct {
 	Args            []string                    `json:"args,omitempty"`
 	Env             []corev1.EnvVar             `json:"env,omitempty"`
 	Ports           []corev1.ContainerPort      `json:"ports,omitempty"`
+	Volumes         []corev1.Volume             `json:"volumes,omitempty"`
+	VolumeMounts    []corev1.VolumeMount        `json:"volumeMounts,omitempty"`
 	Resources       corev1.ResourceRequirements `json:"resources,omitempty"`
 	LivenessProbe   *corev1.Probe               `json:"livenessProbe,omitempty"`
 	ReadinessProbe  *corev1.Probe               `json:"readinessProbe,omitempty"`

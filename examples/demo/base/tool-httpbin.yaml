@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-httpbin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-httpbin
+  template:
+    metadata:
+      labels:
+        app: demo-httpbin
+    spec:
+      containers:
+        - name: httpbin
+          image: mccutchen/go-httpbin:v2.15.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-httpbin
+spec:
+  selector:
+    app: demo-httpbin
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

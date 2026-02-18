@@ -1,0 +1,84 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agenttoolpolicies.agscale.io
+spec:
+  group: agscale.io
+  scope: Namespaced
+  names:
+    plural: agenttoolpolicies
+    singular: agenttoolpolicy
+    kind: AgentToolPolicy
+    shortNames:
+      - atp
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                agentSelector:
+                  type: object
+                  properties:
+                    names:
+                      type: array
+                      items:
+                        type: string
+                    matchLabels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                allowedSkillRefs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                    required:
+                      - name
+                allowedProtocols:
+                  type: array
+                  items:
+                    type: string
+                approvalMode:
+                  type: string
+                  enum:
+                    - Auto
+                    - HumanGate
+                maxCallsPerMinute:
+                  type: integer
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                enforced:
+                  type: boolean
+                violations:
+                  type: integer
+                lastViolationTime:
+                  type: string
+                  format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - name: Enforced
+          type: boolean
+          jsonPath: .status.enforced
+        - name: Violations
+          type: integer
+          jsonPath: .status.violations
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}

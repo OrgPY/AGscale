@@ -1,0 +1,14 @@
+apiVersion: agscale.io/v1alpha1
+kind: DataGovernancePolicy
+metadata:
+  name: support-team-governance
+spec:
+  piiRedaction:
+    - ssn
+    - email
+    - phone
+  allowedDestinations:
+    - support-agent
+  forbiddenFields:
+    - rawPii
+  retentionDays: 7

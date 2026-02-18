@@ -2,6 +2,8 @@ apiVersion: agscale.io/v1alpha1
 kind: Agent
 metadata:
   name: support-agent
+  annotations:
+    agscale.io/backup-llm-endpoint: shared-openclaw-backup
 spec:
   runtimeRef:
     name: python-fastapi-runtime
@@ -10,7 +12,7 @@ spec:
   skillResolutionPolicy: Strict
   replicas: 2
   llmEndpointRef:
-    name: shared-openai
+    name: shared-openclaw
   memoryRefs:
     - name: team-redis-memory
   contextRefs:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	agscalev1alpha1 "agscale/api/v1alpha1"
 )
@@ -53,18 +56,14 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		reconcileErrorsTotal.WithLabelValues("Agent", "RuntimeNotFound").Inc()
 		return ctrl.Result{}, err
 	}
-
-	injectedEnv, err := r.resolveReferences(ctx, agent)
+	toolPolicy, err := r.resolveToolPolicy(ctx, agent)
 	if err != nil {
-		r.setCondition(agent, "ReferencesResolved", metav1.ConditionFalse, "ReferenceResolveFailed", err.Error())
-		r.setCondition(agent, "DependencyHealthy", metav1.ConditionFalse, "ReferenceResolveFailed", err.Error())
+		r.setCondition(agent, "ToolPolicyEnforced", metav1.ConditionFalse, "ToolPolicyResolveFailed", err.Error())
 		_ = r.Status().Update(ctx, agent)
 		result = "error"
-		reconcileErrorsTotal.WithLabelValues("Agent", "ReferenceResolveFailed").Inc()
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		reconcileErrorsTotal.WithLabelValues("Agent", "ToolPolicyResolveFailed").Inc()
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
-	r.setCondition(agent, "DependencyHealthy", metav1.ConditionTrue, "DependenciesOK", "all dependency references resolved")
-
 	policy, err := r.resolveReliabilityPolicy(ctx, agent)
 	if err != nil {
 		r.setCondition(agent, "Healthy", metav1.ConditionFalse, "PolicyResolveFailed", err.Error())
@@ -72,6 +71,51 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		result = "error"
 		reconcileErrorsTotal.WithLabelValues("Agent", "PolicyResolveFailed").Inc()
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+	if open, until, dep := isDependencyCircuitOpen(agent); open {
+		r.setCondition(agent, "DependencyHealthy", metav1.ConditionFalse, "DependencyCircuitOpen", fmt.Sprintf("%s circuit open until %s", dep, until.Format(time.RFC3339)))
+		r.setCondition(agent, "ReferencesResolved", metav1.ConditionFalse, "DependencyCircuitOpen", "skipping dependency resolution while circuit is open")
+		_ = r.Status().Update(ctx, agent)
+		dependencyCircuitTransitionsTotal.WithLabelValues(dep, "open_observed").Inc()
+		return ctrl.Result{RequeueAfter: time.Until(until).Round(time.Second)}, nil
+	}
+
+	injectedEnv, err := r.resolveReferences(ctx, agent, toolPolicy)
+	if err != nil {
+		dep := classifyDependencyFromError(err)
+		failures := bumpDependencyFailures(agent, dep)
+		threshold := dependencyFailureThreshold(policy, dep)
+		if threshold > 0 && failures >= threshold {
+			setDependencyCircuit(agent, dep, time.Now().Add(time.Duration(policy.Spec.Health.FailureWindowSeconds)*time.Second))
+			dependencyCircuitTransitionsTotal.WithLabelValues(dep, "open").Inc()
+		}
+		if updateErr := r.Update(ctx, agent); updateErr != nil {
+			result = "error"
+			reconcileErrorsTotal.WithLabelValues("Agent", "DependencyFailureUpdate").Inc()
+			return ctrl.Result{}, updateErr
+		}
+		r.setCondition(agent, "ReferencesResolved", metav1.ConditionFalse, "ReferenceResolveFailed", err.Error())
+		r.setCondition(agent, "DependencyHealthy", metav1.ConditionFalse, "ReferenceResolveFailed", err.Error())
+		if toolPolicy != nil {
+			r.setCondition(agent, "ToolPolicyEnforced", metav1.ConditionFalse, "ToolPolicyDenied", err.Error())
+			_ = r.recordToolPolicyViolation(ctx, toolPolicy, err.Error())
+		}
+		_ = r.Status().Update(ctx, agent)
+		result = "error"
+		reconcileErrorsTotal.WithLabelValues("Agent", "ReferenceResolveFailed").Inc()
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+	if clearDependencyFailureState(agent) {
+		if updateErr := r.Update(ctx, agent); updateErr != nil {
+			result = "error"
+			reconcileErrorsTotal.WithLabelValues("Agent", "DependencyFailureClear").Inc()
+			return ctrl.Result{}, updateErr
+		}
+		dependencyCircuitTransitionsTotal.WithLabelValues("any", "closed").Inc()
+	}
+	r.setCondition(agent, "DependencyHealthy", metav1.ConditionTrue, "DependenciesOK", "all dependency references resolved")
+	if toolPolicy != nil {
+		r.setCondition(agent, "ToolPolicyEnforced", metav1.ConditionTrue, "ToolPolicyOK", fmt.Sprintf("policy %s enforced", toolPolicy.Name))
 	}
 
 	deploy := buildDeployment(agent, runtimeObj, injectedEnv)
@@ -259,6 +303,29 @@ func (r *AgentReconciler) executeAction(ctx context.Context, action string, agen
 			return false, err.Error()
 		}
 		return true, "set degraded read-only annotation"
+	case "SwitchToBackupLLM":
+		backupName := agent.GetAnnotations()["agscale.io/backup-llm-endpoint"]
+		if backupName == "" {
+			llmFailoverTotal.WithLabelValues("skipped").Inc()
+			return false, "annotation agscale.io/backup-llm-endpoint not set"
+		}
+		if agent.Spec.LLMEndpointRef != nil && agent.Spec.LLMEndpointRef.Name == backupName {
+			llmFailoverTotal.WithLabelValues("skipped").Inc()
+			return false, "backup LLM already active"
+		}
+		current := &agscalev1alpha1.Agent{}
+		if err := r.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, current); err != nil {
+			llmFailoverTotal.WithLabelValues("error").Inc()
+			return false, err.Error()
+		}
+		current.Spec.LLMEndpointRef = &agscalev1alpha1.LocalObjectReference{Name: backupName}
+		if err := r.Update(ctx, current); err != nil {
+			llmFailoverTotal.WithLabelValues("error").Inc()
+			return false, err.Error()
+		}
+		agent.Spec.LLMEndpointRef = &agscalev1alpha1.LocalObjectReference{Name: backupName}
+		llmFailoverTotal.WithLabelValues("applied").Inc()
+		return true, fmt.Sprintf("switched to backup llm endpoint %q", backupName)
 	case "TrafficDrain":
 		return true, "traffic drain action configured as no-op in v1alpha1"
 	case "RollbackRevision":
@@ -266,6 +333,109 @@ func (r *AgentReconciler) executeAction(ctx context.Context, action string, agen
 	default:
 		return false, "unsupported action"
 	}
+}
+
+const (
+	dependencyFailurePrefix = "agscale.io/dependency-failures-"
+	dependencyCircuitDepKey = "agscale.io/dependency-circuit-dependency"
+	dependencyCircuitUntil  = "agscale.io/dependency-circuit-open-until"
+)
+
+func classifyDependencyFromError(err error) string {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "llmendpoint"), strings.Contains(msg, "llm"):
+		return "llm"
+	case strings.Contains(msg, "memorystore"), strings.Contains(msg, "memory"):
+		return "memory"
+	case strings.Contains(msg, "contextprovider"), strings.Contains(msg, "context"):
+		return "context"
+	case strings.Contains(msg, "agentskill"), strings.Contains(msg, "skill"):
+		return "skill"
+	default:
+		return "unknown"
+	}
+}
+
+func dependencyFailureThreshold(policy *agscalev1alpha1.AgentReliabilityPolicy, dep string) int32 {
+	switch dep {
+	case "llm":
+		return policy.Spec.DependencyChecks.LLM.ConsecutiveFailuresForOpen
+	case "memory":
+		return policy.Spec.DependencyChecks.Memory.ConsecutiveFailuresForOpen
+	case "context":
+		return policy.Spec.DependencyChecks.Context.ConsecutiveFailuresForOpen
+	default:
+		for _, v := range []int32{
+			policy.Spec.DependencyChecks.LLM.ConsecutiveFailuresForOpen,
+			policy.Spec.DependencyChecks.Memory.ConsecutiveFailuresForOpen,
+			policy.Spec.DependencyChecks.Context.ConsecutiveFailuresForOpen,
+		} {
+			if v > 0 {
+				return v
+			}
+		}
+		return 0
+	}
+}
+
+func bumpDependencyFailures(agent *agscalev1alpha1.Agent, dep string) int32 {
+	if agent.Annotations == nil {
+		agent.Annotations = map[string]string{}
+	}
+	key := dependencyFailurePrefix + dep
+	current, _ := strconv.ParseInt(agent.Annotations[key], 10, 32)
+	next := int32(current) + 1
+	agent.Annotations[key] = strconv.FormatInt(int64(next), 10)
+	return next
+}
+
+func setDependencyCircuit(agent *agscalev1alpha1.Agent, dep string, until time.Time) {
+	if agent.Annotations == nil {
+		agent.Annotations = map[string]string{}
+	}
+	agent.Annotations[dependencyCircuitDepKey] = dep
+	agent.Annotations[dependencyCircuitUntil] = until.UTC().Format(time.RFC3339)
+}
+
+func isDependencyCircuitOpen(agent *agscalev1alpha1.Agent) (bool, time.Time, string) {
+	if len(agent.Annotations) == 0 {
+		return false, time.Time{}, ""
+	}
+	raw := agent.Annotations[dependencyCircuitUntil]
+	if raw == "" {
+		return false, time.Time{}, ""
+	}
+	until, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return false, time.Time{}, ""
+	}
+	if time.Now().UTC().After(until) {
+		return false, time.Time{}, ""
+	}
+	return true, until, firstNonEmptyString(agent.Annotations[dependencyCircuitDepKey], "unknown")
+}
+
+func clearDependencyFailureState(agent *agscalev1alpha1.Agent) bool {
+	if len(agent.Annotations) == 0 {
+		return false
+	}
+	changed := false
+	for _, key := range []string{
+		dependencyFailurePrefix + "llm",
+		dependencyFailurePrefix + "memory",
+		dependencyFailurePrefix + "context",
+		dependencyFailurePrefix + "skill",
+		dependencyFailurePrefix + "unknown",
+		dependencyCircuitDepKey,
+		dependencyCircuitUntil,
+	} {
+		if _, ok := agent.Annotations[key]; ok {
+			delete(agent.Annotations, key)
+			changed = true
+		}
+	}
+	return changed
 }
 
 func (r *AgentReconciler) recordRemediation(agent *agscalev1alpha1.Agent, action, reason string) {
@@ -320,11 +490,11 @@ func applyPolicyDefaults(policy *agscalev1alpha1.AgentReliabilityPolicy) {
 		policy.Spec.Remediation.MaxActionsPerHour = 6
 	}
 	if len(policy.Spec.Remediation.Actions) == 0 {
-		policy.Spec.Remediation.Actions = []string{"RestartPods", "ScaleOut", "RollbackRevision", "FailOpenReadOnly"}
+		policy.Spec.Remediation.Actions = []string{"RestartPods", "ScaleOut", "SwitchToBackupLLM", "RollbackRevision", "FailOpenReadOnly"}
 	}
 }
 
-func (r *AgentReconciler) resolveReferences(ctx context.Context, agent *agscalev1alpha1.Agent) ([]corev1.EnvVar, error) {
+func (r *AgentReconciler) resolveReferences(ctx context.Context, agent *agscalev1alpha1.Agent, toolPolicy *agscalev1alpha1.AgentToolPolicy) ([]corev1.EnvVar, error) {
 	env := []corev1.EnvVar{
 		{Name: "AGSCALE_AGENT_NAME", Value: agent.Name},
 	}
@@ -339,6 +509,21 @@ func (r *AgentReconciler) resolveReferences(ctx context.Context, agent *agscalev
 			corev1.EnvVar{Name: "AGSCALE_LLM_ENDPOINT", Value: llm.Spec.BaseURL},
 			corev1.EnvVar{Name: "AGSCALE_LLM_MODEL", Value: llm.Spec.DefaultModel},
 		)
+		if llm.Spec.Auth.SecretRef.Name != "" {
+			key := llm.Spec.Auth.SecretRef.Key
+			if key == "" {
+				key = "apiKey"
+			}
+			env = append(env, corev1.EnvVar{
+				Name: "AGSCALE_LLM_API_KEY",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: llm.Spec.Auth.SecretRef.Name},
+						Key:                  key,
+					},
+				},
+			})
+		}
 	}
 
 	memoryNames := make([]string, 0, len(agent.Spec.MemoryRefs))
@@ -374,6 +559,9 @@ func (r *AgentReconciler) resolveReferences(ctx context.Context, agent *agscalev
 		if err := r.Get(ctx, types.NamespacedName{Namespace: agent.Namespace, Name: ref.Name}, &skill); err != nil {
 			return nil, err
 		}
+		if err := enforceToolPolicyOnSkill(agent, toolPolicy, &skill); err != nil {
+			return nil, err
+		}
 		if strictResolution && skill.Spec.Source != nil && !skill.Status.SourceResolved {
 			return nil, fmt.Errorf("skill %q is not source-resolved yet", skill.Name)
 		}
@@ -402,6 +590,120 @@ func (r *AgentReconciler) resolveReferences(ctx context.Context, agent *agscalev
 	}
 
 	return env, nil
+}
+
+func (r *AgentReconciler) resolveToolPolicy(ctx context.Context, agent *agscalev1alpha1.Agent) (*agscalev1alpha1.AgentToolPolicy, error) {
+	var list agscalev1alpha1.AgentToolPolicyList
+	if err := r.List(ctx, &list, client.InNamespace(agent.Namespace)); err != nil {
+		return nil, err
+	}
+	var matches []*agscalev1alpha1.AgentToolPolicy
+	for i := range list.Items {
+		p := &list.Items[i]
+		if toolPolicyAppliesToAgent(p, agent) {
+			matches = append(matches, p)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	if len(matches) > 1 {
+		names := make([]string, 0, len(matches))
+		for _, p := range matches {
+			names = append(names, p.Name)
+		}
+		return nil, fmt.Errorf("multiple AgentToolPolicies match agent %q: %s", agent.Name, strings.Join(names, ","))
+	}
+	return matches[0], nil
+}
+
+func enforceToolPolicyOnSkill(agent *agscalev1alpha1.Agent, policy *agscalev1alpha1.AgentToolPolicy, skill *agscalev1alpha1.AgentSkill) error {
+	if policy == nil {
+		return nil
+	}
+	if policy.Spec.ApprovalMode == "HumanGate" && agent.Annotations["agscale.io/tool-approval"] != "approved" {
+		return fmt.Errorf("tool policy %q requires human approval (set annotation agscale.io/tool-approval=approved)", policy.Name)
+	}
+	if len(policy.Spec.AllowedSkillRefs) > 0 {
+		allowed := false
+		for _, ref := range policy.Spec.AllowedSkillRefs {
+			if ref.Name == skill.Name {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return fmt.Errorf("tool policy %q denies skill %q", policy.Name, skill.Name)
+		}
+	}
+	if len(policy.Spec.AllowedProtocols) > 0 && skill.Spec.Source != nil && skill.Spec.Source.Protocol != "" {
+		allowed := false
+		for _, p := range policy.Spec.AllowedProtocols {
+			if p == skill.Spec.Source.Protocol {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return fmt.Errorf("tool policy %q denies protocol %q for skill %q", policy.Name, skill.Spec.Source.Protocol, skill.Name)
+		}
+	}
+	return nil
+}
+
+func toolPolicyAppliesToAgent(policy *agscalev1alpha1.AgentToolPolicy, agent *agscalev1alpha1.Agent) bool {
+	if policy == nil {
+		return false
+	}
+	selector := policy.Spec.AgentSelector
+	if len(selector.Names) == 0 && len(selector.MatchLabels) == 0 {
+		return false
+	}
+	if len(selector.Names) > 0 {
+		nameMatch := false
+		for _, n := range selector.Names {
+			if n == agent.Name {
+				nameMatch = true
+				break
+			}
+		}
+		if !nameMatch {
+			return false
+		}
+	}
+	if len(selector.MatchLabels) > 0 {
+		labels := agent.GetLabels()
+		for k, v := range selector.MatchLabels {
+			if labels[k] != v {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (r *AgentReconciler) recordToolPolicyViolation(ctx context.Context, policy *agscalev1alpha1.AgentToolPolicy, message string) error {
+	if policy == nil {
+		return nil
+	}
+	current := &agscalev1alpha1.AgentToolPolicy{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}, current); err != nil {
+		return err
+	}
+	now := metav1.Now()
+	current.Status.ObservedGeneration = current.Generation
+	current.Status.Enforced = true
+	current.Status.Violations = current.Status.Violations + 1
+	current.Status.LastViolationTime = &now
+	meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
+		Type:               "Enforced",
+		Status:             metav1.ConditionTrue,
+		Reason:             "ViolationRecorded",
+		Message:            message,
+		LastTransitionTime: now,
+		ObservedGeneration: current.Generation,
+	})
+	return r.Status().Update(ctx, current)
 }
 
 func (r *AgentReconciler) setCondition(agent *agscalev1alpha1.Agent, conditionType string, status metav1.ConditionStatus, reason, message string) {
@@ -485,6 +787,8 @@ func buildDeployment(agent *agscalev1alpha1.Agent, runtimeObj *agscalev1alpha1.A
 	if !isEmptyResources(agent.Spec.Resources) {
 		resources = agent.Spec.Resources
 	}
+	volumes := mergeVolumes(runtimeObj.Spec.Volumes, agent.Spec.Volumes)
+	volumeMounts := mergeVolumeMounts(runtimeObj.Spec.VolumeMounts, agent.Spec.VolumeMounts)
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -512,12 +816,14 @@ func buildDeployment(agent *agscalev1alpha1.Agent, runtimeObj *agscalev1alpha1.A
 							Args:            args,
 							Env:             env,
 							Ports:           runtimeObj.Spec.Ports,
+							VolumeMounts:    volumeMounts,
 							Resources:       resources,
 							LivenessProbe:   runtimeObj.Spec.LivenessProbe,
 							ReadinessProbe:  runtimeObj.Spec.ReadinessProbe,
 							SecurityContext: runtimeObj.Spec.SecurityContext,
 						},
 					},
+					Volumes: volumes,
 				},
 			},
 		},
@@ -602,11 +908,72 @@ func isEmptyResources(r corev1.ResourceRequirements) bool {
 	return len(r.Limits) == 0 && len(r.Requests) == 0
 }
 
+func mergeVolumes(base []corev1.Volume, override []corev1.Volume) []corev1.Volume {
+	out := make([]corev1.Volume, 0, len(base)+len(override))
+	index := map[string]int{}
+	for _, v := range base {
+		if v.Name == "" {
+			continue
+		}
+		index[v.Name] = len(out)
+		out = append(out, v)
+	}
+	for _, v := range override {
+		if v.Name == "" {
+			continue
+		}
+		if i, ok := index[v.Name]; ok {
+			out[i] = v
+			continue
+		}
+		index[v.Name] = len(out)
+		out = append(out, v)
+	}
+	return out
+}
+
+func mergeVolumeMounts(base []corev1.VolumeMount, override []corev1.VolumeMount) []corev1.VolumeMount {
+	out := make([]corev1.VolumeMount, 0, len(base)+len(override))
+	index := map[string]int{}
+	for _, m := range base {
+		if m.Name == "" {
+			continue
+		}
+		index[m.Name] = len(out)
+		out = append(out, m)
+	}
+	for _, m := range override {
+		if m.Name == "" {
+			continue
+		}
+		if i, ok := index[m.Name]; ok {
+			out[i] = m
+			continue
+		}
+		index[m.Name] = len(out)
+		out = append(out, m)
+	}
+	return out
+}
+
 func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&agscalev1alpha1.Agent{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
+		Watches(&agscalev1alpha1.AgentToolPolicy{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+			var agents agscalev1alpha1.AgentList
+			if err := r.List(ctx, &agents, client.InNamespace(obj.GetNamespace())); err != nil {
+				return nil
+			}
+			reqs := make([]reconcile.Request, 0, len(agents.Items))
+			for i := range agents.Items {
+				reqs = append(reqs, reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: agents.Items[i].Namespace, Name: agents.Items[i].Name},
+				})
+			}
+			return reqs
+		})).
 		Complete(r)
 }
