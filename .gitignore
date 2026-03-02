@@ -1,0 +1,9 @@
+# Build outputs
+bin/
+agscale
+
+# Go build cache (local)
+.cache/go-build/
+
+# OS/editor
+.DS_Store

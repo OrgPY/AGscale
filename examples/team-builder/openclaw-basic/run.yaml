@@ -1,0 +1,9 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentWorkflowRun
+metadata:
+  name: support-team-basic-manual
+spec:
+  workflowRef:
+    name: support-team-basic
+  trigger: manual
+  correlationID: demo-team-builder-001

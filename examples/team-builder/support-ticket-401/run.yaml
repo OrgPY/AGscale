@@ -1,0 +1,12 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentWorkflowRun
+metadata:
+  name: support-ticket-401-run
+  annotations:
+    agscale.io/demo-ticket: "After upgrading to v2.3, API returns 401 for valid tokens"
+    agscale.io/demo-target-output: "temporary mitigation + root cause hypothesis + permanent fix steps"
+spec:
+  workflowRef:
+    name: support-ticket-401-team
+  trigger: manual
+  correlationID: ticket-401-2026-001

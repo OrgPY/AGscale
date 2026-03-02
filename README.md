@@ -49,7 +49,9 @@ Demo for two sample agents (`clawdbot`, `moltbot`):
 - Minimal OpenClaw Gateway + qwen-plus: `docs/demo-openclaw-minimal-qwenplus.md`
 - Direct Qwen mode needs only one secret: `qwen-api-key` (see direct minimal doc).
 - OpenCode BYO walkthrough: `docs/demo-opencode-byovalue.md`
+- Team builder quickstart: `docs/team-builder-quickstart.md`
 - Manifests: `examples/demo/base/` (default), `examples/demo/overlays/openclaw/` (optional), `examples/demo/overlays/opencode/` (optional, BYO endpoint), `examples/demo/overlays/moltbot-real/` (optional)
+- Team builder static demo: `examples/team-builder/openclaw-basic/`
 - Real demo app source: `examples/demo/agent-app/`
 - Base demo now includes local `LLMEndpoint`, `MemoryStore`, and `ContextProvider` resources for full-stack composition.
 - Demo overlays focus on explicit provider selection (OpenClaw/OpenCode) and `moltbot-real`.
@@ -135,6 +137,10 @@ Common commands:
 ./bin/agscale team run support-team -n default
 ./bin/agscale team graph support-team -n default
 ./bin/agscale team status support-team-run-<timestamp> -n default
+./bin/agscale team init support-team-easy -n default --profile openclaw --out support-team-easy.yaml
+./bin/agscale team up support-team-easy -n default --profile openclaw --out support-team-easy.yaml
+./bin/agscale team validate -f support-team-easy.yaml -n default
+./bin/agscale team watch support-team-easy-run-<timestamp> -n default
 ./bin/agscale tui agent support-agent -n default
 ./bin/agscale opencode template --base-url https://your-opencode-endpoint.example/v1 --model your-opencode-model
 ```

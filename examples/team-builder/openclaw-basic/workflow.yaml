@@ -1,0 +1,35 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentWorkflow
+metadata:
+  name: support-team-basic
+spec:
+  mode: RequestResponse
+  entryAgentRef:
+    name: support-agent
+  steps:
+    - name: triage
+      agentRef:
+        name: support-agent
+      type: Prompt
+      protocol: http
+      timeoutSeconds: 20
+    - name: retrieval
+      dependsOn:
+        - triage
+      agentRef:
+        name: support-agent
+      type: Retrieve
+      protocol: http
+      timeoutSeconds: 20
+    - name: response
+      dependsOn:
+        - triage
+        - retrieval
+      agentRef:
+        name: support-agent
+      type: Transform
+      protocol: http
+      timeoutSeconds: 20
+  routing:
+    onSuccess: done
+    onFailure: failed

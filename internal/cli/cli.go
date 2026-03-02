@@ -82,6 +82,10 @@ Commands:
   describe agent <name> [-n namespace]
   logs agent <name> [-n namespace] [--tail N]
   apply -f <file> | -k <kustomize-dir> [-n namespace]
+  team init <team-name> [-n namespace] [--profile openclaw|openhands|openai] [--out file] [--apply]
+  team up <team-name> [-n namespace] [--profile openclaw|openhands|openai] [--out file]
+  team validate -f <bundle.yaml> [-n namespace]
+  team watch <run-name> [-n namespace] [--interval-seconds 2] [--timeout-seconds 0]
   team run <workflow> [-n namespace] [--trigger manual] [--correlation-id id]
   team status <run-name> [-n namespace]
   team graph <workflow> [-n namespace]
@@ -335,9 +339,17 @@ func runDoctor(args []string) error {
 
 func runTeam(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: team <run|status|graph>")
+		return errors.New("usage: team <init|up|validate|watch|run|status|graph>")
 	}
 	switch args[0] {
+	case "init":
+		return runTeamInit(args[1:])
+	case "up":
+		return runTeamUp(args[1:])
+	case "validate":
+		return runTeamValidate(args[1:])
+	case "watch":
+		return runTeamWatch(args[1:])
 	case "run":
 		return runTeamRun(args[1:])
 	case "status":
