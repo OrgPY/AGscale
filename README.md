@@ -233,6 +233,22 @@ GitHub Actions workflow at `.github/workflows/ci.yaml` runs:
 - `go test ./...`
 - manifest rendering checks (`kubectl kustomize`)
 
+## CLI Release
+
+CLI-only release pipeline:
+
+- GoReleaser config: `.goreleaser-cli.yaml`
+- GitHub Actions workflow: `.github/workflows/release-cli.yaml`
+
+Publish a new CLI release by tagging:
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+The workflow builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64) and publishes artifacts to GitHub Releases.
+
 ## Helm Chart
 
 Chart path: `charts/agscale`
