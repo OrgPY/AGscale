@@ -43,6 +43,8 @@ func runFleetScan(args []string) error {
 	hostsRaw := fs.String("hosts", "", "ssh hosts, comma-separated")
 	sshCfg := fs.String("ssh-config", "~/.ssh/config", "ssh config path")
 	portsRaw := fs.String("ports", "18789,8080,8000,3000,5000,11434", "port candidates")
+	scanMode := fs.String("scan-mode", "agent-aware", "scan mode: agent-aware|ports")
+	signaturesRaw := fs.String("signatures", "openclaw,opencode,claude,aider,mcp,autogen,langchain", "process signatures for --scan-mode agent-aware")
 	timeout := fs.Int("timeout-seconds", 3, "probe timeout seconds")
 	output := fs.String("output", "table", "output format: table|json")
 	write := fs.Bool("write", false, "persist scan result to inventory")
@@ -63,11 +65,32 @@ func runFleetScan(args []string) error {
 	found := []fleet.AgentRecord{}
 
 	if *local {
-		endpoints := discovery.LocalDefaultEndpoints()
-		if env := strings.TrimSpace(os.Getenv("AGSCALE_DISCOVERY_ENDPOINTS")); env != "" {
-			endpoints = append(endpoints, csvToList(env)...)
+		mode := strings.ToLower(strings.TrimSpace(*scanMode))
+		switch mode {
+		case "agent-aware":
+			sigs := csvToList(*signaturesRaw)
+			if env := strings.TrimSpace(os.Getenv("AGSCALE_AGENT_SIGNATURES")); env != "" {
+				sigs = append(sigs, csvToList(env)...)
+			}
+			localFound := discovery.ScanLocalAgentAware(opts, ports, sigs)
+			// Fallback to explicit endpoint probing only when nothing agent-like was found.
+			if len(localFound) == 0 {
+				endpoints := discovery.LocalDefaultEndpoints()
+				if env := strings.TrimSpace(os.Getenv("AGSCALE_DISCOVERY_ENDPOINTS")); env != "" {
+					endpoints = append(endpoints, csvToList(env)...)
+				}
+				localFound = discovery.ScanLocal(endpoints, opts)
+			}
+			found = append(found, localFound...)
+		case "ports":
+			endpoints := discovery.LocalDefaultEndpoints()
+			if env := strings.TrimSpace(os.Getenv("AGSCALE_DISCOVERY_ENDPOINTS")); env != "" {
+				endpoints = append(endpoints, csvToList(env)...)
+			}
+			found = append(found, discovery.ScanLocal(endpoints, opts)...)
+		default:
+			return fmt.Errorf("unsupported --scan-mode %q (use agent-aware|ports)", *scanMode)
 		}
-		found = append(found, discovery.ScanLocal(endpoints, opts)...)
 	}
 
 	hosts := csvToList(*hostsRaw)

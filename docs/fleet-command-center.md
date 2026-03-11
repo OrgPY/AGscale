@@ -8,7 +8,7 @@ It lets AGScale CLI discover agent software on local/SSH hosts and schedule task
 Local only:
 
 ```bash
-./bin/agscale fleet scan --local --write
+./bin/agscale fleet scan --local --scan-mode agent-aware --write
 ```
 
 Local + SSH hosts:
@@ -16,6 +16,7 @@ Local + SSH hosts:
 ```bash
 ./bin/agscale fleet scan \
   --local \
+  --scan-mode agent-aware \
   --hosts devbox-1,devbox-2 \
   --ssh-config ~/.ssh/config \
   --write
@@ -59,3 +60,7 @@ Dry-run without invoking endpoints:
 - Phase 1 protocols: HTTP/OpenAI-compatible and MCP.
 - SSH probing uses existing key-based auth from `~/.ssh/config`.
 - Inventory is local persisted state (not auto-registered to Kubernetes CRDs).
+- Default mode is `agent-aware`:
+  - finds agent-like processes by signatures (`openclaw`, `opencode`, `claude`, `aider`, `mcp`, ...)
+  - correlates with listening ports, then probes only those endpoints
+- Use `--scan-mode ports` only when you explicitly want broad port sweep behavior.

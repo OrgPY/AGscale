@@ -92,7 +92,7 @@ Commands:
   team status <run-name> [-n namespace]
   team graph <workflow> [-n namespace]
   team command-center <task-name> [-n namespace] [--selector k=v] [--agents a,b] [--exclude-agents x,y] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--entry-agent name] [--protocol http|mcp|a2a] [--out file] [--apply] [--run] [--explain-selection]
-  fleet scan [--local] [--hosts host1,host2] [--ssh-config ~/.ssh/config] [--ports 18789,8080] [--write]
+  fleet scan [--local] [--hosts host1,host2] [--scan-mode agent-aware|ports] [--signatures openclaw,opencode,...] [--ssh-config ~/.ssh/config] [--ports 18789,8080] [--write]
   fleet list [--status healthy|degraded|unknown|all] [--protocol http|mcp|all]
   fleet inspect <agent-id-or-name>
   fleet run <task-name> [--agents a,b] [--selector k=v] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--dry-run]

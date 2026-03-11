@@ -144,7 +144,7 @@ Common commands:
 ./bin/agscale team command-center incident-401 -n default --selector 'agscale.io/domain=support' --require-skills web-search --max-agents 3 --topology dag --apply --run
 ./bin/agscale team validate -f support-team-easy.yaml -n default
 ./bin/agscale team watch support-team-easy-run-<timestamp> -n default
-./bin/agscale fleet scan --local --write
+./bin/agscale fleet scan --local --scan-mode agent-aware --write
 ./bin/agscale fleet list --status healthy
 ./bin/agscale fleet run incident-401 --selector 'scope=local' --max-agents 4 --topology dag --explain-selection --dry-run
 ./bin/agscale tui agent support-agent -n default

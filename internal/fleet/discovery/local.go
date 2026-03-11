@@ -5,13 +5,82 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"agscale/internal/fleet"
 	"agscale/internal/fleet/protocol"
 )
+
+type localProcess struct {
+	PID       int
+	Command   string
+	EngineTag string
+}
+
+func ScanLocalAgentAware(opts fleet.ProbeOptions, ports []int, signatures []string) []fleet.AgentRecord {
+	now := time.Now().UTC()
+	procs := listLocalAgentProcesses(signatures)
+	if len(procs) == 0 {
+		return nil
+	}
+	pidPorts := localListeningPortsByPID()
+	endpointToMeta := map[string]localProcess{}
+
+	for _, p := range procs {
+		portsSet := map[int]bool{}
+		for _, lp := range pidPorts[p.PID] {
+			portsSet[lp] = true
+		}
+		for _, cp := range extractPortsFromCommand(p.Command) {
+			portsSet[cp] = true
+		}
+		if len(portsSet) == 0 {
+			for _, fallback := range ports {
+				portsSet[fallback] = true
+			}
+		}
+		for port := range portsSet {
+			endpoint := fmt.Sprintf("http://127.0.0.1:%d", port)
+			endpointToMeta[endpoint] = p
+		}
+	}
+
+	out := make([]fleet.AgentRecord, 0, len(endpointToMeta))
+	for endpoint, proc := range endpointToMeta {
+		probe := protocol.ProbeEndpoint(endpoint, opts)
+		if !probe.Healthy {
+			continue
+		}
+		record := fleet.AgentRecord{
+			ID:           stableID("local", probe.Protocol, endpoint),
+			Name:         inferNameWithEngine("local", probe.Protocol, endpoint, proc.EngineTag),
+			Host:         "local",
+			Source:       "local-scan",
+			Protocol:     probe.Protocol,
+			Endpoint:     endpoint,
+			Health:       fleet.HealthHealthy,
+			LatencyMs:    probe.LatencyMs,
+			Capabilities: probe.Capabilities,
+			LastSeenAt:   now,
+			Labels: map[string]string{
+				"scope":        "local",
+				"discovery":    "process-aware",
+				"engine":       proc.EngineTag,
+				"processMatch": "true",
+			},
+			Metadata: map[string]string{
+				"pid": strconv.Itoa(proc.PID),
+			},
+		}
+		out = append(out, record)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Endpoint < out[j].Endpoint })
+	return out
+}
 
 func ScanLocal(endpoints []string, opts fleet.ProbeOptions) []fleet.AgentRecord {
 	now := time.Now().UTC()
@@ -58,6 +127,10 @@ func LocalDefaultEndpoints() []string {
 	return out
 }
 
+func DefaultAgentSignatures() []string {
+	return []string{"openclaw", "opencode", "claude", "aider", "mcp", "autogen", "langchain"}
+}
+
 func stableID(host, protocol, endpoint string) string {
 	h := sha1.Sum([]byte(host + "|" + protocol + "|" + endpoint))
 	return hex.EncodeToString(h[:10])
@@ -78,6 +151,14 @@ func inferName(host, protocol, endpoint string) string {
 	return fmt.Sprintf("%s-%s-%s", host, protocol, port)
 }
 
+func inferNameWithEngine(host, protocol, endpoint, engine string) string {
+	name := inferName(host, protocol, endpoint)
+	if strings.TrimSpace(engine) == "" {
+		return name
+	}
+	return engine + "-" + name
+}
+
 func normalizeEndpoint(ep string) string {
 	e := strings.TrimSpace(ep)
 	if e == "" {
@@ -87,4 +168,145 @@ func normalizeEndpoint(ep string) string {
 		e = "http://" + e
 	}
 	return strings.TrimSuffix(e, "/")
+}
+
+func listLocalAgentProcesses(signatures []string) []localProcess {
+	if len(signatures) == 0 {
+		signatures = DefaultAgentSignatures()
+	}
+	cmd := exec.Command("ps", "-axo", "pid=,command=")
+	b, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	sigSet := make([]string, 0, len(signatures))
+	for _, s := range signatures {
+		t := strings.ToLower(strings.TrimSpace(s))
+		if t != "" {
+			sigSet = append(sigSet, t)
+		}
+	}
+	out := []localProcess{}
+	lines := strings.Split(string(b), "\n")
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+		parts := strings.Fields(t)
+		if len(parts) < 2 {
+			continue
+		}
+		pid, err := strconv.Atoi(parts[0])
+		if err != nil || pid <= 0 {
+			continue
+		}
+		cmdline := strings.TrimSpace(strings.TrimPrefix(t, parts[0]))
+		lower := strings.ToLower(cmdline)
+		tag := ""
+		for _, sig := range sigSet {
+			if strings.Contains(lower, sig) {
+				tag = sig
+				break
+			}
+		}
+		if tag == "" {
+			continue
+		}
+		out = append(out, localProcess{PID: pid, Command: cmdline, EngineTag: tag})
+	}
+	return out
+}
+
+func localListeningPortsByPID() map[int][]int {
+	// lsof output in field format:
+	// p<PID>
+	// nTCP 127.0.0.1:18789 (LISTEN)
+	cmd := exec.Command("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-F", "pn")
+	b, err := cmd.Output()
+	if err != nil {
+		return map[int][]int{}
+	}
+	out := map[int][]int{}
+	currentPID := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(t, "p"):
+			pid, err := strconv.Atoi(strings.TrimPrefix(t, "p"))
+			if err == nil && pid > 0 {
+				currentPID = pid
+				if _, ok := out[currentPID]; !ok {
+					out[currentPID] = []int{}
+				}
+			}
+		case strings.HasPrefix(t, "n") && currentPID > 0:
+			if port := parsePortFromAddr(strings.TrimPrefix(t, "n")); port > 0 {
+				out[currentPID] = appendUniquePort(out[currentPID], port)
+			}
+		}
+	}
+	return out
+}
+
+func extractPortsFromCommand(cmd string) []int {
+	tokens := strings.Fields(strings.TrimSpace(cmd))
+	out := []int{}
+	for i := 0; i < len(tokens); i++ {
+		t := tokens[i]
+		if strings.HasPrefix(t, "--port=") {
+			if p, err := strconv.Atoi(strings.TrimPrefix(t, "--port=")); err == nil {
+				out = appendUniquePort(out, p)
+			}
+			continue
+		}
+		if t == "--port" || t == "-p" {
+			if i+1 < len(tokens) {
+				if p, err := strconv.Atoi(strings.Trim(tokens[i+1], " ,")); err == nil {
+					out = appendUniquePort(out, p)
+				}
+			}
+			continue
+		}
+		if strings.Contains(t, ":") {
+			if p := parsePortFromAddr(t); p > 0 {
+				out = appendUniquePort(out, p)
+			}
+		}
+	}
+	return out
+}
+
+func parsePortFromAddr(v string) int {
+	s := strings.TrimSpace(v)
+	if s == "" {
+		return 0
+	}
+	// Trim wrappers like "TCP 127.0.0.1:18789 (LISTEN)"
+	if idx := strings.LastIndex(s, " "); idx >= 0 {
+		s = strings.TrimSpace(s[:idx])
+	}
+	if idx := strings.LastIndex(s, ":"); idx >= 0 && idx+1 < len(s) {
+		p := strings.TrimRight(s[idx+1:], ")")
+		port, err := strconv.Atoi(p)
+		if err == nil && port > 0 && port <= 65535 {
+			return port
+		}
+	}
+	return 0
+}
+
+func appendUniquePort(in []int, p int) []int {
+	if p <= 0 || p > 65535 {
+		return in
+	}
+	for _, e := range in {
+		if e == p {
+			return in
+		}
+	}
+	return append(in, p)
 }
