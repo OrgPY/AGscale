@@ -65,6 +65,7 @@ For `AgentWorkflow`/`AgentWorkflowRun`:
    - `protocol: http` -> default `/invoke`
      fallback `/chat` for OpenClaw-compatible agents
    - `protocol: mcp` -> default `/mcp/invoke`
+   - `protocol: a2a` -> default `/a2a/invoke` (or `integrationRef` target URL)
    - `endpointPath` can override both defaults.
 5. Output from successful dependency steps is passed into the next ready step as input.
 6. Policy gating during run execution:

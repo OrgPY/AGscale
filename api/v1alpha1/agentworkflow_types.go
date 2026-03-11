@@ -20,6 +20,7 @@ const (
 
 	WorkflowProtocolHTTP WorkflowProtocol = "http"
 	WorkflowProtocolMCP  WorkflowProtocol = "mcp"
+	WorkflowProtocolA2A  WorkflowProtocol = "a2a"
 )
 
 type WorkflowStepRetryPolicy struct {
@@ -30,6 +31,7 @@ type WorkflowStepRetryPolicy struct {
 type WorkflowStepSpec struct {
 	Name           string                  `json:"name,omitempty"`
 	AgentRef       *LocalObjectReference   `json:"agentRef,omitempty"`
+	IntegrationRef *LocalObjectReference   `json:"integrationRef,omitempty"`
 	DependsOn      []string                `json:"dependsOn,omitempty"`
 	Protocol       WorkflowProtocol        `json:"protocol,omitempty"`
 	EndpointPath   string                  `json:"endpointPath,omitempty"`

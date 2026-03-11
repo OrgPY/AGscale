@@ -45,6 +45,11 @@ spec:
                         properties:
                           name:
                             type: string
+                      integrationRef:
+                        type: object
+                        properties:
+                          name:
+                            type: string
                       dependsOn:
                         type: array
                         items:
@@ -54,6 +59,7 @@ spec:
                         enum:
                           - http
                           - mcp
+                          - a2a
                       endpointPath:
                         type: string
                       type:

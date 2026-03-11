@@ -43,6 +43,7 @@ kubectl apply -f examples/agents/
 
 Demo for two sample agents (`clawdbot`, `moltbot`):
 
+- Primary operator runbook (install order + minimal demos + troubleshooting): `docs/runbook-openclaw-operator.md`
 - Guide: `docs/demo-clawdbot-moltbot.md`
 - Full OpenClaw stack walkthrough: `docs/demo-openclaw-full-stack.md`
 - Minimal Direct Qwen (VectorEngine): `docs/demo-qwen-vectorengine-minimal.md`
@@ -50,6 +51,7 @@ Demo for two sample agents (`clawdbot`, `moltbot`):
 - Direct Qwen mode needs only one secret: `qwen-api-key` (see direct minimal doc).
 - OpenCode BYO walkthrough: `docs/demo-opencode-byovalue.md`
 - Team builder quickstart: `docs/team-builder-quickstart.md`
+- Fleet command center (local/SSH discovery + task scheduling): `docs/fleet-command-center.md`
 - Manifests: `examples/demo/base/` (default), `examples/demo/overlays/openclaw/` (optional), `examples/demo/overlays/opencode/` (optional, BYO endpoint), `examples/demo/overlays/moltbot-real/` (optional)
 - Team builder static demo: `examples/team-builder/openclaw-basic/`
 - Real demo app source: `examples/demo/agent-app/`
@@ -139,8 +141,12 @@ Common commands:
 ./bin/agscale team status support-team-run-<timestamp> -n default
 ./bin/agscale team init support-team-easy -n default --profile openclaw --out support-team-easy.yaml
 ./bin/agscale team up support-team-easy -n default --profile openclaw --out support-team-easy.yaml
+./bin/agscale team command-center incident-401 -n default --selector 'agscale.io/domain=support' --require-skills web-search --max-agents 3 --topology dag --apply --run
 ./bin/agscale team validate -f support-team-easy.yaml -n default
 ./bin/agscale team watch support-team-easy-run-<timestamp> -n default
+./bin/agscale fleet scan --local --write
+./bin/agscale fleet list --status healthy
+./bin/agscale fleet run incident-401 --selector 'scope=local' --max-agents 4 --topology dag --explain-selection --dry-run
 ./bin/agscale tui agent support-agent -n default
 ./bin/agscale opencode template --base-url https://your-opencode-endpoint.example/v1 --model your-opencode-model
 ```
@@ -154,8 +160,9 @@ TUI notes:
 Workflow run notes:
 
 - `AgentWorkflow.spec.steps[*].dependsOn` enables DAG dependencies.
-- `AgentWorkflow.spec.steps[*].protocol` supports `http` or `mcp`.
-- `AgentWorkflow.spec.steps[*].endpointPath` can override default invoke path (`/invoke` or `/mcp/invoke`).
+- `AgentWorkflow.spec.steps[*].protocol` supports `http`, `mcp`, or `a2a`.
+- `AgentWorkflow.spec.steps[*].integrationRef` can target an `IntegrationEndpoint` (optional, primarily for `a2a`).
+- `AgentWorkflow.spec.steps[*].endpointPath` can override default invoke path (`/invoke`, `/mcp/invoke`, or `/a2a/invoke`).
 - For HTTP workflow steps, controller tries `/invoke` then `/chat` by default for OpenClaw compatibility.
 - `AgentWorkflow.spec.policyRefs.toolPolicyRef` gates allowed protocols and optional human approval.
 - `AgentWorkflow.spec.policyRefs.budgetPolicyRef` blocks runs when budget status is `Exceeded`.

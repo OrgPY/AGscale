@@ -98,6 +98,21 @@ func validateWorkflowSpec(workflow *agscalev1alpha1.AgentWorkflow) error {
 			return fmt.Errorf("duplicate step name %q", step.Name)
 		}
 		seen[step.Name] = true
+		if step.Protocol != "" &&
+			step.Protocol != agscalev1alpha1.WorkflowProtocolHTTP &&
+			step.Protocol != agscalev1alpha1.WorkflowProtocolMCP &&
+			step.Protocol != agscalev1alpha1.WorkflowProtocolA2A {
+			return fmt.Errorf("spec.steps[%d].protocol %q is unsupported", i, step.Protocol)
+		}
+		if step.Protocol == agscalev1alpha1.WorkflowProtocolA2A {
+			if (step.AgentRef == nil || step.AgentRef.Name == "") && (step.IntegrationRef == nil || step.IntegrationRef.Name == "") {
+				return fmt.Errorf("spec.steps[%d] protocol a2a requires agentRef or integrationRef", i)
+			}
+		} else {
+			if step.AgentRef == nil || step.AgentRef.Name == "" {
+				return fmt.Errorf("spec.steps[%d].agentRef.name is required for protocol %q", i, step.Protocol)
+			}
+		}
 	}
 	for i, step := range workflow.Spec.Steps {
 		for _, dep := range step.DependsOn {

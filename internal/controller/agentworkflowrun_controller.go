@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -373,16 +374,18 @@ func redactPayloadMap(payload map[string]any, fields []string) {
 func (r *AgentWorkflowRunReconciler) executeStep(ctx context.Context, run *agscalev1alpha1.AgentWorkflowRun, workflow *agscalev1alpha1.AgentWorkflow, step agscalev1alpha1.WorkflowStepSpec, input map[string]any) (agscalev1alpha1.WorkflowRunStepResult, map[string]any, error) {
 	stepStarted := time.Now()
 	result := agscalev1alpha1.WorkflowRunStepResult{StepName: step.Name, Status: "Succeeded"}
-	if step.AgentRef == nil || step.AgentRef.Name == "" {
-		return result, nil, fmt.Errorf("step missing agentRef")
+	var agent *agscalev1alpha1.Agent
+	if step.AgentRef != nil && step.AgentRef.Name != "" {
+		agentObj := &agscalev1alpha1.Agent{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: run.Namespace, Name: step.AgentRef.Name}, agentObj); err != nil {
+			return result, nil, fmt.Errorf("resolve agent: %w", err)
+		}
+		agent = agentObj
 	}
 
-	agent := &agscalev1alpha1.Agent{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: run.Namespace, Name: step.AgentRef.Name}, agent); err != nil {
-		return result, nil, fmt.Errorf("resolve agent: %w", err)
-	}
-	if agent.Status.URL == "" {
-		return result, nil, fmt.Errorf("agent url unavailable")
+	baseURL, authToken, err := r.resolveStepTarget(ctx, run.Namespace, step, agent)
+	if err != nil {
+		return result, nil, err
 	}
 
 	payload := map[string]any{
@@ -390,7 +393,7 @@ func (r *AgentWorkflowRunReconciler) executeStep(ctx context.Context, run *agsca
 		"workflow": workflow.Name,
 		"step":     step.Name,
 		"from":     workflow.Spec.EntryAgentRef.Name,
-		"to":       step.AgentRef.Name,
+		"to":       resolvedStepTargetName(step),
 		"protocol": step.Protocol,
 		"input":    input,
 	}
@@ -399,7 +402,7 @@ func (r *AgentWorkflowRunReconciler) executeStep(ctx context.Context, run *agsca
 	if attempts < 1 {
 		attempts = 1
 	}
-	endpoints := resolveStepEndpoints(agent.Status.URL, step)
+	endpoints := resolveStepEndpoints(baseURL, step)
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		for _, endpoint := range endpoints {
@@ -409,6 +412,9 @@ func (r *AgentWorkflowRunReconciler) executeStep(ctx context.Context, run *agsca
 				continue
 			}
 			req.Header.Set("Content-Type", "application/json")
+			if authToken != "" {
+				req.Header.Set("Authorization", "Bearer "+authToken)
+			}
 			httpClient := &http.Client{Timeout: stepTimeout(step.TimeoutSeconds)}
 			resp, err := httpClient.Do(req)
 			if err != nil {
@@ -470,6 +476,67 @@ func resolveStepEndpoints(baseURL string, step agscalev1alpha1.WorkflowStepSpec)
 	if step.Protocol == agscalev1alpha1.WorkflowProtocolMCP {
 		return []string{base + "/mcp/invoke"}
 	}
+	if step.Protocol == agscalev1alpha1.WorkflowProtocolA2A {
+		return []string{base + "/a2a/invoke"}
+	}
 	// OpenClaw-compatible default: try invoke API then chat API.
 	return []string{base + "/invoke", base + "/chat"}
+}
+
+func resolvedStepTargetName(step agscalev1alpha1.WorkflowStepSpec) string {
+	if step.AgentRef != nil && step.AgentRef.Name != "" {
+		return step.AgentRef.Name
+	}
+	if step.IntegrationRef != nil && step.IntegrationRef.Name != "" {
+		return step.IntegrationRef.Name
+	}
+	return "unknown"
+}
+
+func (r *AgentWorkflowRunReconciler) resolveStepTarget(ctx context.Context, namespace string, step agscalev1alpha1.WorkflowStepSpec, agent *agscalev1alpha1.Agent) (baseURL string, authToken string, err error) {
+	// Default policy: local-first for A2A discovery.
+	if agent != nil && agent.Status.URL != "" {
+		baseURL = agent.Status.URL
+	}
+	if step.Protocol != agscalev1alpha1.WorkflowProtocolA2A {
+		if baseURL == "" {
+			return "", "", fmt.Errorf("agent url unavailable")
+		}
+		return baseURL, "", nil
+	}
+
+	if step.IntegrationRef != nil && step.IntegrationRef.Name != "" {
+		iep := &agscalev1alpha1.IntegrationEndpoint{}
+		if getErr := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: step.IntegrationRef.Name}, iep); getErr == nil {
+			// External/source-2 discovery fallback, while keeping local-first behavior.
+			external := strings.TrimSpace(iep.Spec.A2A.BaseURL)
+			if external == "" {
+				external = strings.TrimSpace(iep.Spec.Connection.URL)
+			}
+			if baseURL == "" && external != "" {
+				baseURL = external
+			}
+
+			secretRef := iep.Spec.A2A.Auth.SecretRef
+			if secretRef == nil {
+				secretRef = iep.Spec.Connection.Auth.SecretRef
+			}
+			if secretRef != nil && secretRef.Name != "" {
+				secret := &corev1.Secret{}
+				if secErr := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretRef.Name}, secret); secErr == nil {
+					key := secretRef.Key
+					if key == "" {
+						key = "token"
+					}
+					if raw, ok := secret.Data[key]; ok {
+						authToken = string(raw)
+					}
+				}
+			}
+		}
+	}
+	if baseURL == "" {
+		return "", "", fmt.Errorf("a2a target endpoint unresolved (need agent.status.url or integrationRef connection/a2a baseURL)")
+	}
+	return baseURL, authToken, nil
 }

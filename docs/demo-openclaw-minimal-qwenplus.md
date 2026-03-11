@@ -1,6 +1,8 @@
 # Minimal Runnable Demo: OpenClaw + qwen-plus
 
 This is the smallest AGScale demo that deploys one OpenClaw agent using model `qwen-plus`.
+For the canonical operator flow (install order, troubleshooting, acceptance checklist),
+see `docs/runbook-openclaw-operator.md`.
 
 This is **gateway mode** (through OpenClaw runtime), not direct third-party mode.
 For direct VectorEngine Qwen (`https://api.vectorengine.ai/v1`) with a single secret,

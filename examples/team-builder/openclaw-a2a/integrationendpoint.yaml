@@ -1,0 +1,15 @@
+apiVersion: agscale.io/v1alpha1
+kind: IntegrationEndpoint
+metadata:
+  name: clawhub-a2a
+spec:
+  type: external
+  protocol: a2a
+  connection:
+    url: https://clawhub.ai/a2a
+    timeoutSeconds: 10
+  a2a:
+    baseURL: https://clawhub.ai/a2a
+    capabilities:
+      - search
+      - retrieval

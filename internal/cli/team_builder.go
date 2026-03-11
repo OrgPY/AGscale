@@ -21,6 +21,7 @@ import (
 type teamBuilderStep struct {
 	Name         string
 	Agent        string
+	Integration  string
 	Type         string
 	Protocol     string
 	EndpointPath string
@@ -157,17 +158,33 @@ func fillTeamBuilderSpec(reader *bufio.Reader, spec *teamBuilderSpec, forceApply
 		if err != nil {
 			return err
 		}
-		agent, err := promptString(reader, "target agent", spec.EntryAgent)
-		if err != nil {
-			return err
-		}
+		agent := ""
 		stepType, err := promptString(reader, "step type (Prompt|Retrieve|ToolCall|Transform|Route)", defaultStepType(i))
 		if err != nil {
 			return err
 		}
-		protocol, err := promptString(reader, "protocol (http|mcp)", "http")
+		protocol, err := promptString(reader, "protocol (http|mcp|a2a)", "http")
 		if err != nil {
 			return err
+		}
+		p := strings.ToLower(strings.TrimSpace(protocol))
+		if p == "a2a" {
+			agent, err = promptString(reader, "target local agent (optional for remote a2a)", "")
+			if err != nil {
+				return err
+			}
+		} else {
+			agent, err = promptString(reader, "target agent", spec.EntryAgent)
+			if err != nil {
+				return err
+			}
+		}
+		integration := ""
+		if p == "a2a" {
+			integration, err = promptString(reader, "integrationRef name (optional, for remote a2a hub)", "")
+			if err != nil {
+				return err
+			}
 		}
 		timeoutSec, err := promptInt(reader, "timeout seconds", defaultTimeout, 1, 600)
 		if err != nil {
@@ -190,8 +207,9 @@ func fillTeamBuilderSpec(reader *bufio.Reader, spec *teamBuilderSpec, forceApply
 		spec.Steps = append(spec.Steps, teamBuilderStep{
 			Name:         strings.TrimSpace(name),
 			Agent:        strings.TrimSpace(agent),
+			Integration:  strings.TrimSpace(integration),
 			Type:         normalizeStepType(stepType),
-			Protocol:     strings.ToLower(strings.TrimSpace(protocol)),
+			Protocol:     p,
 			EndpointPath: strings.TrimSpace(endpointPath),
 			TimeoutSec:   timeoutSec,
 			DependsOn:    dependsOn,
@@ -326,11 +344,15 @@ func validateTeamBuilderSpec(spec teamBuilderSpec) error {
 			return fmt.Errorf("duplicate step name %q", s.Name)
 		}
 		known[s.Name] = struct{}{}
-		if s.Agent == "" {
-			return fmt.Errorf("step %q must reference an agent", s.Name)
-		}
-		if s.Protocol != "http" && s.Protocol != "mcp" {
+		if s.Protocol != "http" && s.Protocol != "mcp" && s.Protocol != "a2a" {
 			return fmt.Errorf("step %q has unsupported protocol %q", s.Name, s.Protocol)
+		}
+		if s.Protocol == "a2a" {
+			if s.Agent == "" && s.Integration == "" {
+				return fmt.Errorf("step %q must set at least one of agent or integrationRef for a2a", s.Name)
+			}
+		} else if s.Agent == "" {
+			return fmt.Errorf("step %q must reference an agent", s.Name)
 		}
 	}
 	for _, s := range spec.Steps {
@@ -400,7 +422,12 @@ func renderTeamBundleYAML(spec teamBuilderSpec) string {
 	fmt.Fprintf(&b, "  steps:\n")
 	for _, s := range spec.Steps {
 		fmt.Fprintf(&b, "    - name: %s\n", s.Name)
-		fmt.Fprintf(&b, "      agentRef:\n        name: %s\n", s.Agent)
+		if s.Agent != "" {
+			fmt.Fprintf(&b, "      agentRef:\n        name: %s\n", s.Agent)
+		}
+		if s.Integration != "" {
+			fmt.Fprintf(&b, "      integrationRef:\n        name: %s\n", s.Integration)
+		}
 		if len(s.DependsOn) > 0 {
 			fmt.Fprintf(&b, "      dependsOn:\n")
 			for _, dep := range s.DependsOn {

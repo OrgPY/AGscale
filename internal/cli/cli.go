@@ -58,6 +58,8 @@ func Execute(args []string) error {
 		return runDoctor(args[1:])
 	case "team":
 		return runTeam(args[1:])
+	case "fleet":
+		return runFleet(args[1:])
 	case "tui":
 		return runTUI(args[1:])
 	case "help", "-h", "--help":
@@ -89,6 +91,11 @@ Commands:
   team run <workflow> [-n namespace] [--trigger manual] [--correlation-id id]
   team status <run-name> [-n namespace]
   team graph <workflow> [-n namespace]
+  team command-center <task-name> [-n namespace] [--selector k=v] [--agents a,b] [--exclude-agents x,y] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--entry-agent name] [--protocol http|mcp|a2a] [--out file] [--apply] [--run] [--explain-selection]
+  fleet scan [--local] [--hosts host1,host2] [--ssh-config ~/.ssh/config] [--ports 18789,8080] [--write]
+  fleet list [--status healthy|degraded|unknown|all] [--protocol http|mcp|all]
+  fleet inspect <agent-id-or-name>
+  fleet run <task-name> [--agents a,b] [--selector k=v] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--dry-run]
   tui agent <name> [-n namespace]
 `)
 }
@@ -339,7 +346,7 @@ func runDoctor(args []string) error {
 
 func runTeam(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: team <init|up|validate|watch|run|status|graph>")
+		return errors.New("usage: team <init|up|validate|watch|run|status|graph|command-center>")
 	}
 	switch args[0] {
 	case "init":
@@ -356,6 +363,8 @@ func runTeam(args []string) error {
 		return runTeamStatus(args[1:])
 	case "graph":
 		return runTeamGraph(args[1:])
+	case "command-center":
+		return runTeamCommandCenter(args[1:])
 	default:
 		return fmt.Errorf("unknown team subcommand %q", args[0])
 	}

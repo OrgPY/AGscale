@@ -1,6 +1,7 @@
 # Team Builder Quickstart
 
 This guide shows how to use AGScale team-builder CLI to create and run an agent team quickly.
+For cluster install order and operator troubleshooting baseline, see `docs/runbook-openclaw-operator.md`.
 
 ## 0) Prerequisites
 
@@ -31,7 +32,8 @@ Wizard collects:
 
 - entry agent
 - step DAG (`dependsOn`)
-- protocol (`http`/`mcp`)
+- protocol (`http`/`mcp`/`a2a`)
+- optional `integrationRef` for `a2a` steps
 - optional policy refs
 - optional `EventSource` + `IntegrationEndpoint`
 
@@ -79,3 +81,35 @@ kubectl apply -k examples/team-builder/openclaw-basic
 ./bin/agscale team run support-team-basic -n default
 ```
 
+For A2A + remote integration example:
+
+```bash
+kubectl apply -k examples/team-builder/openclaw-a2a
+./bin/agscale team watch support-team-a2a-run-01 -n default
+```
+
+## 7) Command center auto-team (subset scheduling)
+
+Build a team from existing agents without using all agents:
+
+```bash
+./bin/agscale team command-center incident-401 \
+  -n default \
+  --selector 'agscale.io/domain=support' \
+  --require-skills web-search \
+  --max-agents 3 \
+  --topology dag \
+  --protocol http \
+  --out incident-401-team.yaml \
+  --explain-selection \
+  --apply --run
+```
+
+Behavior:
+
+- selects only ready agents (`readyReplicas > 0` and status URL available)
+- applies label/skill filters and excludes non-matching agents
+- chooses top N (`--max-agents`) and generates an `AgentWorkflow`
+- default topology is `dag` (set `--topology sequential` if needed)
+- `--explain-selection` prints per-agent inclusion/exclusion reasons
+- optionally applies and creates first run

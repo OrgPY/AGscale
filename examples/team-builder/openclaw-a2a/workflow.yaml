@@ -1,0 +1,36 @@
+apiVersion: agscale.io/v1alpha1
+kind: AgentWorkflow
+metadata:
+  name: support-team-a2a
+spec:
+  mode: RequestResponse
+  entryAgentRef:
+    name: support-agent
+  steps:
+    - name: triage
+      agentRef:
+        name: support-agent
+      type: Prompt
+      protocol: http
+      timeoutSeconds: 20
+    - name: remote-skill
+      dependsOn:
+        - triage
+      integrationRef:
+        name: clawhub-a2a
+      type: ToolCall
+      protocol: a2a
+      endpointPath: /invoke
+      timeoutSeconds: 20
+    - name: response
+      dependsOn:
+        - triage
+        - remote-skill
+      agentRef:
+        name: support-agent
+      type: Transform
+      protocol: http
+      timeoutSeconds: 20
+  routing:
+    onSuccess: done
+    onFailure: failed

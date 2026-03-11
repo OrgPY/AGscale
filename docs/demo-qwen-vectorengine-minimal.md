@@ -2,6 +2,8 @@
 
 This is the smallest AGScale demo for direct third-party Qwen access at:
 `https://api.vectorengine.ai/v1`
+For the canonical operator flow (install order, troubleshooting, acceptance checklist),
+see `docs/runbook-openclaw-operator.md`.
 
 This mode needs only one secret: `qwen-api-key`.
 It uses AGScale's demo runtime image (`agscale/demo-agent:0.1.0`) in OpenAI-compatible mode.

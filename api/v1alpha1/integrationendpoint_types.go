@@ -23,9 +23,21 @@ type IntegrationConnection struct {
 	Headers        map[string]string `json:"headers,omitempty"`
 }
 
+type IntegrationA2AConfig struct {
+	BaseURL        string               `json:"baseURL,omitempty"`
+	Capabilities   []string             `json:"capabilities,omitempty"`
+	Auth           IntegrationAuth      `json:"auth,omitempty"`
+	DiscoveryHints map[string]string    `json:"discoveryHints,omitempty"`
+	Headers        map[string]string    `json:"headers,omitempty"`
+	TLS            IntegrationTLS       `json:"tls,omitempty"`
+	RateLimit      IntegrationRateLimit `json:"rateLimit,omitempty"`
+}
+
 type IntegrationEndpointSpec struct {
 	Type         string                `json:"type,omitempty"`
+	Protocol     string                `json:"protocol,omitempty"`
 	Connection   IntegrationConnection `json:"connection,omitempty"`
+	A2A          IntegrationA2AConfig  `json:"a2a,omitempty"`
 	Capabilities []string              `json:"capabilities,omitempty"`
 	RateLimit    IntegrationRateLimit  `json:"rateLimit,omitempty"`
 }

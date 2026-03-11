@@ -964,6 +964,9 @@ func (in *WorkflowStepSpec) DeepCopyInto(out *WorkflowStepSpec) {
 	if in.AgentRef != nil {
 		out.AgentRef = &LocalObjectReference{Name: in.AgentRef.Name}
 	}
+	if in.IntegrationRef != nil {
+		out.IntegrationRef = &LocalObjectReference{Name: in.IntegrationRef.Name}
+	}
 	if in.DependsOn != nil {
 		out.DependsOn = append([]string(nil), in.DependsOn...)
 	}
@@ -1226,6 +1229,7 @@ func (in *IntegrationEndpointList) DeepCopyObject() runtime.Object {
 func (in *IntegrationEndpointSpec) DeepCopyInto(out *IntegrationEndpointSpec) {
 	*out = *in
 	in.Connection.DeepCopyInto(&out.Connection)
+	in.A2A.DeepCopyInto(&out.A2A)
 	if in.Capabilities != nil {
 		out.Capabilities = append([]string(nil), in.Capabilities...)
 	}
@@ -1254,6 +1258,34 @@ func (in *IntegrationConnection) DeepCopyInto(out *IntegrationConnection) {
 	}
 	if in.TLS.CASecretRef != nil {
 		out.TLS.CASecretRef = &LocalObjectReference{Name: in.TLS.CASecretRef.Name}
+	}
+	if in.Headers != nil {
+		out.Headers = make(map[string]string, len(in.Headers))
+		for k, v := range in.Headers {
+			out.Headers[k] = v
+		}
+	}
+}
+
+func (in *IntegrationA2AConfig) DeepCopyInto(out *IntegrationA2AConfig) {
+	*out = *in
+	if in.Capabilities != nil {
+		out.Capabilities = append([]string(nil), in.Capabilities...)
+	}
+	if in.Auth.SecretRef != nil {
+		out.Auth.SecretRef = &SecretKeyReference{
+			Name: in.Auth.SecretRef.Name,
+			Key:  in.Auth.SecretRef.Key,
+		}
+	}
+	if in.TLS.CASecretRef != nil {
+		out.TLS.CASecretRef = &LocalObjectReference{Name: in.TLS.CASecretRef.Name}
+	}
+	if in.DiscoveryHints != nil {
+		out.DiscoveryHints = make(map[string]string, len(in.DiscoveryHints))
+		for k, v := range in.DiscoveryHints {
+			out.DiscoveryHints[k] = v
+		}
 	}
 	if in.Headers != nil {
 		out.Headers = make(map[string]string, len(in.Headers))
