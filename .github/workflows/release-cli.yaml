@@ -175,18 +175,18 @@ jobs:
           OWNER="${RELEASE_REPO%%/*}"
           NAME="${RELEASE_REPO#*/}"
           cp .goreleaser-cli.yaml .goreleaser-cli.resolved.yaml
-          cat >> .goreleaser-cli.resolved.yaml <<EOF
-release:
-  github:
-    owner: ${OWNER}
-    name: ${NAME}
-  prerelease: auto
-  mode: replace
-  replace_existing_artifacts: true
-  target_commitish: ${RELEASE_BRANCH}
-  extra_files:
-    - glob: ./dist/install-cli.sh
-EOF
+          {
+            printf 'release:\n'
+            printf '  github:\n'
+            printf '    owner: %s\n' "${OWNER}"
+            printf '    name: %s\n' "${NAME}"
+            printf '  prerelease: auto\n'
+            printf '  mode: replace\n'
+            printf '  replace_existing_artifacts: true\n'
+            printf '  target_commitish: %s\n' "${RELEASE_BRANCH}"
+            printf '  extra_files:\n'
+            printf '    - glob: ./dist/install-cli.sh\n'
+          } >> .goreleaser-cli.resolved.yaml
 
       - name: Setup Go
         uses: actions/setup-go@v5
