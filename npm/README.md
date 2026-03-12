@@ -13,5 +13,5 @@ npx @agscale/agscale version
 Override release source if needed:
 
 ```bash
-AGSCALE_REPO=OrgPY/AGscale AGSCALE_RELEASE_TAG=v0.1.3 npx @agscale/agscale version
+AGSCALE_REPO=OrgPY/AGscale AGSCALE_RELEASE_TAG=v0.1.4 npx @agscale/agscale version
 ```

@@ -267,7 +267,7 @@ npx @agscale/agscale version
 If package version is not yet aligned with release tag, pin release tag:
 
 ```bash
-AGSCALE_RELEASE_TAG=v0.1.3 npx @agscale/agscale version
+AGSCALE_RELEASE_TAG=v0.1.4 npx @agscale/agscale version
 ```
 
 Manual npm republish/recovery workflow: `.github/workflows/publish-npm.yaml` (Trusted Publishing via GitHub OIDC, no `NPM_TOKEN` needed).
@@ -282,7 +282,7 @@ agscale version
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.1.3 bash
+curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.1.4 bash
 ```
 
 ## Helm Chart
