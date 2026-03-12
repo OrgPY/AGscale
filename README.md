@@ -250,6 +250,37 @@ git push origin v0.3.0
 The workflow builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64) and publishes artifacts to GitHub Releases.
 It publishes both compressed archives and raw executable files (`format: binary`).
 
+## NPM / NPX
+
+NPM wrapper package path: `npm/` (package: `@agscale/agscale`).
+
+Run directly without install:
+
+```bash
+npx @agscale/agscale version
+```
+
+If package version is not yet aligned with release tag, pin release tag:
+
+```bash
+AGSCALE_RELEASE_TAG=v0.3.1 npx @agscale/agscale version
+```
+
+NPM publish workflow: `.github/workflows/publish-npm.yaml` (requires `NPM_TOKEN` secret).
+
+Headless Linux install (no UI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yangpuyu/agscale/main/hack/install-cli.sh | bash
+agscale version
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yangpuyu/agscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.3.1 bash
+```
+
 ## Helm Chart
 
 Chart path: `charts/agscale`

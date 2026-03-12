@@ -1,0 +1,28 @@
+{
+  "name": "@agscale/agscale",
+  "version": "0.0.0-dev",
+  "description": "AGScale CLI npm wrapper (downloads native binary from GitHub Releases)",
+  "license": "MIT",
+  "private": false,
+  "type": "commonjs",
+  "bin": {
+    "agscale": "bin/agscale.js"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yangpuyu/agscale.git"
+  },
+  "keywords": [
+    "agscale",
+    "agent",
+    "kubernetes",
+    "cli"
+  ]
+}
