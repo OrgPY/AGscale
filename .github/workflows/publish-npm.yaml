@@ -34,6 +34,7 @@ jobs:
         id: release
         shell: bash
         run: |
+          set -euo pipefail
           TAG="${{ inputs.tag }}"
           if [[ -z "$TAG" ]]; then
             VERSION="$(node -p "require('./package.json').version")"
@@ -46,11 +47,17 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Set package version from tag
+      - name: Validate package version matches tag
+        shell: bash
         run: |
+          set -euo pipefail
           TAG="${{ steps.release.outputs.tag }}"
           VERSION="${TAG#v}"
-          npm version "${VERSION}" --no-git-tag-version
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
+            echo "npm/package.json version ${PACKAGE_VERSION} does not match tag ${VERSION}" >&2
+            exit 1
+          fi
 
       - name: Publish
         run: npm publish --access public
