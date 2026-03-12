@@ -242,14 +242,16 @@ CLI-only release pipeline:
 - GoReleaser config: `.goreleaser-cli.yaml`
 - GitHub Actions workflow: `.github/workflows/release-cli.yaml`
 
-Publish a new CLI release by tagging:
+Release automation is version-driven from `npm/package.json`.
+
+To publish a new release:
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+# bump npm/package.json to the target version
+# merge the change to main
 ```
 
-The workflow builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64) and publishes artifacts to GitHub Releases.
+On push to `main`, the workflow reads the package version, creates/pushes tag `vX.Y.Z` when it does not already exist, builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64), publishes GitHub Release artifacts, and then publishes the npm wrapper package.
 It publishes both compressed archives and raw executable files (`format: binary`).
 
 ## NPM / NPX
@@ -265,10 +267,10 @@ npx @agscale/agscale version
 If package version is not yet aligned with release tag, pin release tag:
 
 ```bash
-AGSCALE_RELEASE_TAG=v0.1.2 npx @agscale/agscale version
+AGSCALE_RELEASE_TAG=v0.1.3 npx @agscale/agscale version
 ```
 
-NPM publish workflow: `.github/workflows/publish-npm.yaml` (Trusted Publishing via GitHub OIDC, no `NPM_TOKEN` needed).
+Manual npm republish/recovery workflow: `.github/workflows/publish-npm.yaml` (Trusted Publishing via GitHub OIDC, no `NPM_TOKEN` needed).
 
 Headless Linux install (no UI):
 
@@ -280,7 +282,7 @@ agscale version
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.1.2 bash
+curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.1.3 bash
 ```
 
 ## Helm Chart

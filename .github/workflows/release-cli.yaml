@@ -2,21 +2,81 @@ name: release-cli
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      should_release: ${{ steps.release.outputs.should_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Release Version
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="$(node -p "require('./npm/package.json').version")"
+            TAG="v${VERSION}"
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
+            echo "invalid semver version: $VERSION" >&2
+            exit 1
+          fi
+
+          SHOULD_RELEASE=true
+          if [[ "${GITHUB_REF_TYPE:-}" != "tag" ]] && git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            SHOULD_RELEASE=false
+          fi
+
+          if [[ "$SHOULD_RELEASE" == "true" && "${GITHUB_REF_TYPE:-}" != "tag" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "should_release=$SHOULD_RELEASE"
+          } >> "$GITHUB_OUTPUT"
+
   goreleaser:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Fetch Release Tag
+        run: |
+          git fetch --force --tags
+          git checkout "${{ needs.prepare.outputs.tag }}"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -32,3 +92,35 @@ jobs:
           args: release --clean --config .goreleaser-cli.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  npm:
+    needs:
+      - prepare
+      - goreleaser
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: npm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch Release Tag
+        run: |
+          git fetch --force --tags
+          git checkout "${{ needs.prepare.outputs.tag }}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Set package version from release tag
+        run: npm version "${{ needs.prepare.outputs.version }}" --no-git-tag-version
+
+      - name: Publish
+        run: npm publish --access public
