@@ -248,6 +248,7 @@ git push origin v0.3.0
 ```
 
 The workflow builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64) and publishes artifacts to GitHub Releases.
+It publishes both compressed archives and raw executable files (`format: binary`).
 
 ## Helm Chart
 
