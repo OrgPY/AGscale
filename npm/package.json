@@ -1,6 +1,6 @@
 {
   "name": "@agscale/agscale",
-  "version": "0.0.0-dev",
+  "version": "0.1.2",
   "description": "AGScale CLI npm wrapper (downloads native binary from GitHub Releases)",
   "license": "MIT",
   "private": false,
@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yangpuyu/agscale.git"
+    "url": "https://github.com/OrgPY/AGscale.git"
   },
   "keywords": [
     "agscale",
