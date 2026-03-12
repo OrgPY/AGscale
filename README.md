@@ -131,11 +131,11 @@ make build-cli
 Common commands:
 
 ```bash
-./bin/agscale get agents -n default
-./bin/agscale doctor -n default
-./bin/agscale describe agent support-agent -n default
-./bin/agscale logs agent support-agent -n default --tail 100
-./bin/agscale apply -k examples/platform
+./bin/agscale cluster get agents -n default
+./bin/agscale cluster doctor -n default
+./bin/agscale cluster describe agent support-agent -n default
+./bin/agscale cluster logs agent support-agent -n default --tail 100
+./bin/agscale cluster apply -k examples/platform
 ./bin/agscale team run support-team -n default
 ./bin/agscale team graph support-team -n default
 ./bin/agscale team status support-team-run-<timestamp> -n default
@@ -147,13 +147,15 @@ Common commands:
 ./bin/agscale fleet scan --local --scan-mode agent-aware --write
 ./bin/agscale fleet list --status healthy
 ./bin/agscale fleet run incident-401 --selector 'scope=local' --max-agents 4 --topology dag --explain-selection --dry-run
-./bin/agscale tui agent support-agent -n default
+./bin/agscale tui
+./bin/agscale cluster tui agent support-agent -n default
 ./bin/agscale opencode template --base-url https://your-opencode-endpoint.example/v1 --model your-opencode-model
 ```
 
 TUI notes:
 
-- `tui agent <name>` provides quick status, logs, chat, restart-pod, scale, and backup-LLM failover actions.
+- `tui` opens a combined selector for cluster `Agent` resources and fleet inventory agents.
+- `cluster tui agent <name>` keeps the Kubernetes operator view with status, logs, chat, restart-pod, scale, and backup-LLM failover actions.
 - Chat uses `Agent.status.url` and defaults to `POST /chat`.
 - Override chat path with annotation `agscale.io/chat-path`.
 
@@ -243,8 +245,8 @@ CLI-only release pipeline:
 Publish a new CLI release by tagging:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 The workflow builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64) and publishes artifacts to GitHub Releases.
@@ -263,22 +265,22 @@ npx @agscale/agscale version
 If package version is not yet aligned with release tag, pin release tag:
 
 ```bash
-AGSCALE_RELEASE_TAG=v0.3.1 npx @agscale/agscale version
+AGSCALE_RELEASE_TAG=v0.1.2 npx @agscale/agscale version
 ```
 
-NPM publish workflow: `.github/workflows/publish-npm.yaml` (requires `NPM_TOKEN` secret).
+NPM publish workflow: `.github/workflows/publish-npm.yaml` (Trusted Publishing via GitHub OIDC, no `NPM_TOKEN` needed).
 
 Headless Linux install (no UI):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yangpuyu/agscale/main/hack/install-cli.sh | bash
+curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | bash
 agscale version
 ```
 
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yangpuyu/agscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.3.1 bash
+curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.1.2 bash
 ```
 
 ## Helm Chart

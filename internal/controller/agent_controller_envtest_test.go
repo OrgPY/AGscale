@@ -150,6 +150,73 @@ func TestAgentReconcileCreatesWorkloads(t *testing.T) {
 	}
 }
 
+func TestAgentReconcileDisablesServiceAndClearsStatus(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	testEnv, k8sClient, scheme := setupControllerEnvtest(t)
+	defer func() {
+		_ = testEnv.Stop()
+	}()
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "agscale-service-toggle"}}
+	mustCreate(t, ctx, k8sClient, ns)
+
+	runtimeObj := &agscalev1alpha1.AgentRuntime{
+		ObjectMeta: metav1.ObjectMeta{Name: "rt", Namespace: ns.Name},
+		Spec: agscalev1alpha1.AgentRuntimeSpec{
+			Image: "nginx:1.27",
+		},
+	}
+	mustCreate(t, ctx, k8sClient, runtimeObj)
+
+	agent := &agscalev1alpha1.Agent{
+		ObjectMeta: metav1.ObjectMeta{Name: "agent-toggle", Namespace: ns.Name},
+		Spec: agscalev1alpha1.AgentSpec{
+			RuntimeRef: agscalev1alpha1.LocalObjectReference{Name: runtimeObj.Name},
+			Service: agscalev1alpha1.AgentServiceSpec{
+				Enabled:    true,
+				Port:       8081,
+				TargetPort: 8080,
+				Type:       corev1.ServiceTypeClusterIP,
+			},
+		},
+	}
+	mustCreate(t, ctx, k8sClient, agent)
+
+	reconciler := &AgentReconciler{Client: k8sClient, Scheme: scheme}
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}}); err != nil {
+		t.Fatalf("initial reconcile failed: %v", err)
+	}
+
+	latest := &agscalev1alpha1.Agent{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, latest); err != nil {
+		t.Fatalf("get agent after reconcile: %v", err)
+	}
+	if latest.Status.URL == "" {
+		t.Fatalf("expected status url to be populated before disabling service")
+	}
+
+	latest.Spec.Service.Enabled = false
+	mustUpdate(t, ctx, k8sClient, latest)
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}}); err != nil {
+		t.Fatalf("reconcile after disabling service failed: %v", err)
+	}
+
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, latest); err != nil {
+		t.Fatalf("get agent after service disable: %v", err)
+	}
+	if latest.Status.ServiceName != "" || latest.Status.URL != "" {
+		t.Fatalf("expected service status to be cleared, got service=%q url=%q", latest.Status.ServiceName, latest.Status.URL)
+	}
+
+	var serviceFound corev1.Service
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: agent.Name, Namespace: agent.Namespace}, &serviceFound); err == nil {
+		t.Fatalf("expected service to be deleted when service.enabled=false")
+	}
+}
+
 func setupControllerEnvtest(t *testing.T) (*envtest.Environment, client.Client, *k8sruntime.Scheme) {
 	t.Helper()
 
@@ -185,5 +252,12 @@ func mustCreate(t *testing.T, ctx context.Context, c client.Client, objs ...clie
 		if err := c.Create(ctx, obj); err != nil {
 			t.Fatalf("failed creating %T: %v", obj, err)
 		}
+	}
+}
+
+func mustUpdate(t *testing.T, ctx context.Context, c client.Client, obj client.Object) {
+	t.Helper()
+	if err := c.Update(ctx, obj); err != nil {
+		t.Fatalf("failed updating %T: %v", obj, err)
 	}
 }

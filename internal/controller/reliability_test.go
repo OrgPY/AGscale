@@ -1,9 +1,12 @@
 package controller
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agscalev1alpha1 "agscale/api/v1alpha1"
@@ -61,5 +64,43 @@ func TestCanRemediateRespectsCooldownAndLimit(t *testing.T) {
 	}
 	if !canRemediate(agent, policy, now) {
 		t.Fatalf("expected remediation to be allowed")
+	}
+}
+
+func TestEvaluateAndRemediateScaledToZeroIsHealthy(t *testing.T) {
+	t.Parallel()
+
+	replicas := int32(0)
+	agent := &agscalev1alpha1.Agent{}
+	deploy := &appsv1.Deployment{
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+		},
+	}
+	policy := &agscalev1alpha1.AgentReliabilityPolicy{
+		Spec: agscalev1alpha1.AgentReliabilityPolicySpec{
+			Health: agscalev1alpha1.ReliabilityHealthSpec{
+				MinReadyPercent: 80,
+			},
+			Remediation: agscalev1alpha1.ReliabilityRemediationSpec{
+				Actions:           []string{"RestartPods", "ScaleOut"},
+				MaxActionsPerHour: 2,
+				CooldownSeconds:   60,
+			},
+		},
+	}
+
+	reconciler := &AgentReconciler{}
+	reconciler.evaluateAndRemediate(context.Background(), agent, deploy, policy)
+
+	healthy := meta.FindStatusCondition(agent.Status.Conditions, "Healthy")
+	if healthy == nil {
+		t.Fatalf("expected Healthy condition to be set")
+	}
+	if healthy.Status != metav1.ConditionTrue || healthy.Reason != "ScaledToZero" {
+		t.Fatalf("expected scaled-to-zero to be healthy, got status=%s reason=%s", healthy.Status, healthy.Reason)
+	}
+	if len(agent.Status.RecentRemediations) != 0 {
+		t.Fatalf("expected no remediation for scaled-to-zero deployment")
 	}
 }

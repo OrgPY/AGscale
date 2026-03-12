@@ -58,6 +58,7 @@ Dry-run without invoking endpoints:
 ## Notes
 
 - Phase 1 protocols: HTTP/OpenAI-compatible and MCP.
+- OpenAI-compatible endpoints use the first model discovered from `/v1/models`; if the endpoint hides models behind auth, set `AGSCALE_OPENAI_MODEL` (or `AGSCALE_OPENAI_MODEL_<AGENT_NAME>`).
 - SSH probing uses existing key-based auth from `~/.ssh/config`.
 - Inventory is local persisted state (not auto-registered to Kubernetes CRDs).
 - Default mode is `agent-aware`:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${AGSCALE_REPO:-yangpuyu/agscale}"
+REPO="${AGSCALE_REPO:-OrgPY/AGscale}"
 VERSION="${AGSCALE_VERSION:-latest}"
 INSTALL_DIR="${AGSCALE_INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="${AGSCALE_BINARY_NAME:-agscale}"

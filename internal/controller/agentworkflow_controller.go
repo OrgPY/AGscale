@@ -121,5 +121,41 @@ func validateWorkflowSpec(workflow *agscalev1alpha1.AgentWorkflow) error {
 			}
 		}
 	}
+	if workflowHasDependencyCycle(workflow.Spec.Steps) {
+		return fmt.Errorf("spec.steps contains a dependency cycle")
+	}
 	return nil
+}
+
+func workflowHasDependencyCycle(steps []agscalev1alpha1.WorkflowStepSpec) bool {
+	graph := make(map[string][]string, len(steps))
+	for _, step := range steps {
+		graph[step.Name] = append([]string{}, step.DependsOn...)
+	}
+	visiting := map[string]bool{}
+	visited := map[string]bool{}
+	var dfs func(string) bool
+	dfs = func(name string) bool {
+		if visiting[name] {
+			return true
+		}
+		if visited[name] {
+			return false
+		}
+		visiting[name] = true
+		for _, dep := range graph[name] {
+			if dfs(dep) {
+				return true
+			}
+		}
+		visiting[name] = false
+		visited[name] = true
+		return false
+	}
+	for _, step := range steps {
+		if dfs(step.Name) {
+			return true
+		}
+	}
+	return false
 }

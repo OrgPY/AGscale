@@ -40,5 +40,6 @@ type ProbeResult struct {
 	Protocol     string
 	LatencyMs    int64
 	Capabilities []string
+	Metadata     map[string]string
 	LastError    string
 }

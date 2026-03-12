@@ -11,8 +11,8 @@ For cluster install order and operator troubleshooting baseline, see `docs/runbo
 Check:
 
 ```bash
-./bin/agscale doctor -n default
-./bin/agscale get agents -n default
+./bin/agscale cluster doctor -n default
+./bin/agscale cluster get agents -n default
 ```
 
 ## 1) Build CLI
@@ -61,7 +61,7 @@ Option B: one-command guided create + apply + first run
 ## 5) Watch the run in real time
 
 ```bash
-./bin/agscale get runs -n default
+./bin/agscale cluster get runs -n default
 ./bin/agscale team watch <RUN_NAME> -n default
 ```
 

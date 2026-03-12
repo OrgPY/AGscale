@@ -150,6 +150,15 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 		agent.Status.ServiceName = svc.Name
 		agent.Status.URL = fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", svc.Name, svc.Namespace, svc.Spec.Ports[0].Port)
+	} else {
+		svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: agent.Name, Namespace: agent.Namespace}}
+		if err := r.Delete(ctx, svc); err != nil && !apierrors.IsNotFound(err) {
+			result = "error"
+			reconcileErrorsTotal.WithLabelValues("Agent", "ServiceDelete").Inc()
+			return ctrl.Result{}, err
+		}
+		agent.Status.ServiceName = ""
+		agent.Status.URL = ""
 	}
 
 	if agent.Spec.Autoscaling != nil {
@@ -221,8 +230,14 @@ func (r *AgentReconciler) resolveReliabilityPolicy(ctx context.Context, agent *a
 
 func (r *AgentReconciler) evaluateAndRemediate(ctx context.Context, agent *agscalev1alpha1.Agent, deploy *appsv1.Deployment, policy *agscalev1alpha1.AgentReliabilityPolicy) {
 	desired := int32(1)
-	if deploy.Spec.Replicas != nil && *deploy.Spec.Replicas > 0 {
+	if deploy.Spec.Replicas != nil {
 		desired = *deploy.Spec.Replicas
+	}
+	if desired == 0 {
+		r.setCondition(agent, "Healthy", metav1.ConditionTrue, "ScaledToZero", "agent intentionally scaled to zero")
+		r.setCondition(agent, "ErrorBudgetBurning", metav1.ConditionFalse, "ScaledToZero", "no traffic expected while scaled to zero")
+		r.setCondition(agent, "Remediating", metav1.ConditionFalse, "Idle", "no remediation needed while scaled to zero")
+		return
 	}
 	readyPercent := int32(100 * deploy.Status.ReadyReplicas / desired)
 	if readyPercent >= policy.Spec.Health.MinReadyPercent {

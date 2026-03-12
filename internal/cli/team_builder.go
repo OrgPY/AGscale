@@ -48,6 +48,8 @@ type teamBuilderSpec struct {
 	OutFile          string
 }
 
+var execCommand = exec.Command
+
 func runTeamInit(args []string) error {
 	return runTeamCreate(args, false)
 }
@@ -451,7 +453,7 @@ func renderTeamBundleYAML(spec teamBuilderSpec) string {
 }
 
 func runKubectlApply(namespace, file string) error {
-	cmd := exec.Command("kubectl", "apply", "-n", namespace, "-f", file)
+	cmd := execCommand("kubectl", "apply", "-n", namespace, "-f", file)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -486,22 +488,25 @@ func runTeamValidate(args []string) error {
 		return errors.New("usage: team validate -f <bundle.yaml> [-n namespace]")
 	}
 
-	clientCmd := exec.Command("kubectl", "apply", "--dry-run=client", "-n", *namespace, "-f", *file)
-	clientOut, clientErr := clientCmd.CombinedOutput()
+	clientOut, clientErr := runKubectlCombinedOutput("apply", "--dry-run=client", "-n", *namespace, "-f", *file)
 	if clientErr != nil {
 		return fmt.Errorf("client dry-run failed:\n%s", strings.TrimSpace(string(clientOut)))
 	}
 	fmt.Println("[ok] kubectl client dry-run passed")
 
-	serverCmd := exec.Command("kubectl", "apply", "--dry-run=server", "-n", *namespace, "-f", *file)
-	serverOut, serverErr := serverCmd.CombinedOutput()
+	serverOut, serverErr := runKubectlCombinedOutput("apply", "--dry-run=server", "-n", *namespace, "-f", *file)
 	if serverErr != nil {
 		fmt.Printf("[warn] server dry-run failed:\n%s\n", strings.TrimSpace(string(serverOut)))
 		fmt.Println("hint: ensure agscale CRDs/controller are installed and namespace exists")
-		return nil
+		return fmt.Errorf("server dry-run failed")
 	}
 	fmt.Println("[ok] kubectl server dry-run passed")
 	return nil
+}
+
+func runKubectlCombinedOutput(args ...string) ([]byte, error) {
+	cmd := execCommand("kubectl", args...)
+	return cmd.CombinedOutput()
 }
 
 func runTeamWatch(args []string) error {

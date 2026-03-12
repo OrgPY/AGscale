@@ -76,6 +76,9 @@ func ScanLocalAgentAware(opts fleet.ProbeOptions, ports []int, signatures []stri
 				"pid": strconv.Itoa(proc.PID),
 			},
 		}
+		for k, v := range probe.Metadata {
+			record.Metadata[k] = v
+		}
 		out = append(out, record)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Endpoint < out[j].Endpoint })
@@ -106,6 +109,7 @@ func ScanLocal(endpoints []string, opts fleet.ProbeOptions) []fleet.AgentRecord 
 			LastSeenAt:   now,
 			LastError:    probe.LastError,
 			Labels:       map[string]string{"scope": "local"},
+			Metadata:     probe.Metadata,
 		}
 		if probe.Healthy {
 			record.Health = fleet.HealthHealthy
