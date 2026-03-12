@@ -7,6 +7,16 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, e.g. v0.1.4. Leave empty to derive from npm/package.json."
+        required: false
+        type: string
+      publish_npm:
+        description: "Publish the npm wrapper package as part of this manual run."
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -14,8 +24,13 @@ permissions:
 
 jobs:
   prepare:
-    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      checkout_ref: ${{ steps.release.outputs.checkout_ref }}
+      should_release: ${{ steps.release.outputs.should_release }}
+      should_publish_npm: ${{ steps.release.outputs.should_publish_npm }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,36 +40,74 @@ jobs:
       - name: Determine Release Version
         id: release
         shell: bash
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
+          INPUT_PUBLISH_NPM: ${{ github.event.inputs.publish_npm || 'true' }}
         run: |
           set -euo pipefail
           git fetch --force --tags
 
-          VERSION="$(node -p "require('./npm/package.json').version")"
-          TAG="v${VERSION}"
+          SHOULD_RELEASE=true
+          SHOULD_PUBLISH_NPM=true
+          CHECKOUT_REF=""
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${INPUT_PUBLISH_NPM}" != "true" ]]; then
+            SHOULD_PUBLISH_NPM=false
+          fi
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+            CHECKOUT_REF="${TAG}"
+          elif [[ -n "${INPUT_TAG}" ]]; then
+            TAG="${INPUT_TAG}"
+            VERSION="${TAG#v}"
+            CHECKOUT_REF="${TAG}"
+            if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+              echo "release tag ${TAG} does not exist" >&2
+              exit 1
+            fi
+          else
+            VERSION="$(node -p "require('./npm/package.json').version")"
+            TAG="v${VERSION}"
+            CHECKOUT_REF="${TAG}"
+            if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+              SHOULD_RELEASE=false
+            else
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag -a "$TAG" -m "Release $TAG"
+              git push origin "$TAG"
+            fi
+          fi
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
             echo "invalid semver version: $VERSION" >&2
             exit 1
           fi
 
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "release tag ${TAG} already exists; nothing to do"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "checkout_ref=${CHECKOUT_REF}"
+            echo "should_release=${SHOULD_RELEASE}"
+            echo "should_publish_npm=${SHOULD_PUBLISH_NPM}"
+          } >> "$GITHUB_OUTPUT"
 
   goreleaser:
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout Release Ref
+        run: |
+          git fetch --force --tags
+          git checkout "${{ needs.prepare.outputs.checkout_ref }}"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -72,8 +125,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   npm:
-    needs: goreleaser
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - prepare
+      - goreleaser
+    if: needs.prepare.outputs.should_release == 'true' && needs.prepare.outputs.should_publish_npm == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -83,6 +138,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout Release Ref
+        working-directory: .
+        run: |
+          git fetch --force --tags
+          git checkout "${{ needs.prepare.outputs.checkout_ref }}"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -94,7 +155,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ needs.prepare.outputs.tag }}"
           VERSION="${TAG#v}"
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then

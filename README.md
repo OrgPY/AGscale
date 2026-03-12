@@ -251,8 +251,10 @@ To publish a new release:
 # merge the change to main
 ```
 
-On push to `main`, the workflow reads the package version and creates/pushes tag `vX.Y.Z` when it does not already exist. The tag-triggered release workflow then builds `./cmd/agscale` for linux/darwin/windows (amd64/arm64), publishes GitHub Release artifacts, and publishes the npm wrapper package.
+On push to `main`, the workflow reads the package version, creates/pushes tag `vX.Y.Z` when it does not already exist, then continues in the same workflow to build `./cmd/agscale` for linux/darwin/windows (amd64/arm64), publish GitHub Release artifacts, and publish the npm wrapper package.
 It publishes both compressed archives and raw executable files (`format: binary`).
+If you need to recover an existing release tag, run `.github/workflows/release-cli.yaml` manually and provide `tag=vX.Y.Z`.
+If npm is already published for that version, set `publish_npm=false` on the manual run.
 
 ## NPM / NPX
 
