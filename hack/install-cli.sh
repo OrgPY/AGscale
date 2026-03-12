@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${AGSCALE_REPO:-OrgPY/AGscale}"
+REPO="${AGSCALE_RELEASE_REPO:-${AGSCALE_REPO:-OrgPY/AGscale}}"
 VERSION="${AGSCALE_VERSION:-latest}"
 INSTALL_DIR="${AGSCALE_INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="${AGSCALE_BINARY_NAME:-agscale}"
@@ -14,7 +14,7 @@ Usage:
   $0 [--repo owner/repo] [--version vX.Y.Z|latest] [--install-dir /usr/local/bin] [--binary-name agscale]
 
 Environment overrides:
-  AGSCALE_REPO, AGSCALE_VERSION, AGSCALE_INSTALL_DIR, AGSCALE_BINARY_NAME
+  AGSCALE_RELEASE_REPO, AGSCALE_REPO, AGSCALE_VERSION, AGSCALE_INSTALL_DIR, AGSCALE_BINARY_NAME
 EOF
 }
 

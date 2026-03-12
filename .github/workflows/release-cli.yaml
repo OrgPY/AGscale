@@ -9,13 +9,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to publish, e.g. v0.1.4. Leave empty to derive from npm/package.json."
+        description: "Existing release tag or version to publish, e.g. v0.1.4 or 0.1.4. Leave empty to derive from npm/package.json."
+        required: false
+        type: string
+      release_repo:
+        description: "GitHub repo that should host public release assets, e.g. OrgPY/agscale-releases."
         required: false
         type: string
       publish_npm:
         description: "Publish the npm wrapper package as part of this manual run."
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -31,6 +35,8 @@ jobs:
       checkout_ref: ${{ steps.release.outputs.checkout_ref }}
       should_release: ${{ steps.release.outputs.should_release }}
       should_publish_npm: ${{ steps.release.outputs.should_publish_npm }}
+      release_repo: ${{ steps.release.outputs.release_repo }}
+      release_branch: ${{ steps.release.outputs.release_branch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,17 +48,36 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ github.event.inputs.tag || '' }}
-          INPUT_PUBLISH_NPM: ${{ github.event.inputs.publish_npm || 'true' }}
+          INPUT_RELEASE_REPO: ${{ github.event.inputs.release_repo || '' }}
+          INPUT_PUBLISH_NPM: ${{ github.event.inputs.publish_npm || 'false' }}
+          VAR_RELEASE_REPO: ${{ vars.AGSCALE_PUBLIC_RELEASE_REPO || '' }}
+          VAR_RELEASE_BRANCH: ${{ vars.AGSCALE_PUBLIC_RELEASE_BRANCH || '' }}
+          VAR_PUBLISH_NPM: ${{ vars.AGSCALE_PUBLISH_NPM || 'false' }}
         run: |
           set -euo pipefail
           git fetch --force --tags
 
           SHOULD_RELEASE=true
-          SHOULD_PUBLISH_NPM=true
+          SHOULD_PUBLISH_NPM=false
           CHECKOUT_REF=""
+          RELEASE_REPO="${INPUT_RELEASE_REPO:-${VAR_RELEASE_REPO:-${GITHUB_REPOSITORY}}}"
+          RELEASE_BRANCH="${VAR_RELEASE_BRANCH:-main}"
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${INPUT_PUBLISH_NPM}" != "true" ]]; then
-            SHOULD_PUBLISH_NPM=false
+          if [[ ! "${RELEASE_REPO}" =~ ^[^/]+/[^/]+$ ]]; then
+            echo "invalid release repo: ${RELEASE_REPO} (expected owner/repo)" >&2
+            exit 1
+          fi
+
+          if [[ "${VAR_PUBLISH_NPM}" == "true" ]]; then
+            SHOULD_PUBLISH_NPM=true
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if [[ "${INPUT_PUBLISH_NPM}" == "true" ]]; then
+              SHOULD_PUBLISH_NPM=true
+            else
+              SHOULD_PUBLISH_NPM=false
+            fi
           fi
 
           if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
@@ -61,6 +86,9 @@ jobs:
             CHECKOUT_REF="${TAG}"
           elif [[ -n "${INPUT_TAG}" ]]; then
             TAG="${INPUT_TAG}"
+            if [[ "${TAG}" != v* ]]; then
+              TAG="v${TAG}"
+            fi
             VERSION="${TAG#v}"
             CHECKOUT_REF="${TAG}"
             if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
@@ -92,6 +120,8 @@ jobs:
             echo "checkout_ref=${CHECKOUT_REF}"
             echo "should_release=${SHOULD_RELEASE}"
             echo "should_publish_npm=${SHOULD_PUBLISH_NPM}"
+            echo "release_repo=${RELEASE_REPO}"
+            echo "release_branch=${RELEASE_BRANCH}"
           } >> "$GITHUB_OUTPUT"
 
   goreleaser:
@@ -109,6 +139,55 @@ jobs:
           git fetch --force --tags
           git checkout "${{ needs.prepare.outputs.checkout_ref }}"
 
+      - name: Select Release Token
+        env:
+          RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
+          SOURCE_REPO: ${{ github.repository }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.AGSCALE_PUBLIC_RELEASE_TOKEN }}
+          DEFAULT_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${RELEASE_REPO}" != "${SOURCE_REPO}" ]]; then
+            if [[ -z "${PUBLIC_RELEASE_TOKEN}" ]]; then
+              echo "AGSCALE_PUBLIC_RELEASE_TOKEN secret is required to publish to ${RELEASE_REPO}" >&2
+              exit 1
+            fi
+            echo "GORELEASER_GITHUB_TOKEN=${PUBLIC_RELEASE_TOKEN}" >> "$GITHUB_ENV"
+          else
+            echo "GORELEASER_GITHUB_TOKEN=${DEFAULT_GITHUB_TOKEN}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Render Public Install Script
+        env:
+          RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          sed "s|^REPO=.*$|REPO=\"\${AGSCALE_RELEASE_REPO:-\${AGSCALE_REPO:-${RELEASE_REPO}}}\"|" hack/install-cli.sh > dist/install-cli.sh
+          chmod +x dist/install-cli.sh
+
+      - name: Render GoReleaser Config
+        env:
+          RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
+          RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
+        run: |
+          set -euo pipefail
+          OWNER="${RELEASE_REPO%%/*}"
+          NAME="${RELEASE_REPO#*/}"
+          cp .goreleaser-cli.yaml .goreleaser-cli.resolved.yaml
+          cat >> .goreleaser-cli.resolved.yaml <<EOF
+release:
+  github:
+    owner: ${OWNER}
+    name: ${NAME}
+  prerelease: auto
+  mode: replace
+  replace_existing_artifacts: true
+  target_commitish: ${RELEASE_BRANCH}
+  extra_files:
+    - glob: ./dist/install-cli.sh
+EOF
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -120,9 +199,9 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean --config .goreleaser-cli.yaml
+          args: release --clean --config .goreleaser-cli.resolved.yaml
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GORELEASER_GITHUB_TOKEN }}
 
   npm:
     needs:

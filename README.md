@@ -251,10 +251,19 @@ To publish a new release:
 # merge the change to main
 ```
 
-On push to `main`, the workflow reads the package version, creates/pushes tag `vX.Y.Z` when it does not already exist, then continues in the same workflow to build `./cmd/agscale` for linux/darwin/windows (amd64/arm64), publish GitHub Release artifacts, and publish the npm wrapper package.
+On push to `main`, the workflow reads the package version, creates/pushes tag `vX.Y.Z` when it does not already exist, then continues in the same workflow to build `./cmd/agscale` for linux/darwin/windows (amd64/arm64) and publish GitHub Release artifacts.
 It publishes both compressed archives and raw executable files (`format: binary`).
-If you need to recover an existing release tag, run `.github/workflows/release-cli.yaml` manually and provide `tag=vX.Y.Z`.
+If you need to recover an existing release tag, run `.github/workflows/release-cli.yaml` manually and provide `tag=vX.Y.Z` or `tag=X.Y.Z`.
 If npm is already published for that version, set `publish_npm=false` on the manual run.
+By default, the main release workflow only publishes GitHub release assets. npm publish is opt-in via repository variable `AGSCALE_PUBLISH_NPM=true` or manual input `publish_npm=true`.
+
+To publish release assets from a private source repo into a separate public GitHub repo, configure:
+
+- repository variable `AGSCALE_PUBLIC_RELEASE_REPO` = `owner/public-repo`
+- repository variable `AGSCALE_PUBLIC_RELEASE_BRANCH` = default branch of that public repo, usually `main`
+- repository secret `AGSCALE_PUBLIC_RELEASE_TOKEN` = PAT with `contents:write` on the public repo
+
+When `AGSCALE_PUBLIC_RELEASE_REPO` is set, GoReleaser publishes to that repo and uploads a rendered `install-cli.sh` asset that defaults to the public release repo.
 
 ## NPM / NPX
 
@@ -269,22 +278,29 @@ npx @agscale/agscale version
 If package version is not yet aligned with release tag, pin release tag:
 
 ```bash
-AGSCALE_RELEASE_TAG=v0.1.4 npx @agscale/agscale version
+AGSCALE_RELEASE_REPO=owner/public-repo AGSCALE_RELEASE_TAG=v0.1.4 npx @agscale/agscale version
 ```
 
 Manual npm republish/recovery workflow: `.github/workflows/publish-npm.yaml` (Trusted Publishing via GitHub OIDC, no `NPM_TOKEN` needed).
 
-Headless Linux install (no UI):
+Headless Linux install (no UI), when the release assets live in the source repo:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | bash
 agscale version
 ```
 
+If release assets are published to a separate public repo, install from that repo's release asset instead:
+
+```bash
+curl -fsSL https://github.com/owner/public-repo/releases/latest/download/install-cli.sh | bash
+agscale version
+```
+
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OrgPY/AGscale/main/hack/install-cli.sh | AGSCALE_VERSION=v0.1.4 bash
+curl -fsSL https://github.com/owner/public-repo/releases/latest/download/install-cli.sh | AGSCALE_VERSION=v0.1.4 bash
 ```
 
 ## Helm Chart

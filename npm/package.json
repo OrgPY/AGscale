@@ -5,6 +5,9 @@
   "license": "MIT",
   "private": false,
   "type": "commonjs",
+  "agscale": {
+    "releaseRepo": "OrgPY/AGscale"
+  },
   "bin": {
     "agscale": "bin/agscale.js"
   },
