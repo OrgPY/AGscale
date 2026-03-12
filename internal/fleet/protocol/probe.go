@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,12 +19,14 @@ func ProbeEndpoint(endpoint string, opts fleet.ProbeOptions) fleet.ProbeResult {
 	client := &http.Client{Timeout: timeout}
 
 	start := time.Now()
-	if ok := probeHTTP(client, endpoint); ok {
+	httpProbe := probeHTTP(client, endpoint)
+	if httpProbe.Healthy {
 		return fleet.ProbeResult{
 			Healthy:      true,
 			Protocol:     "http",
 			LatencyMs:    time.Since(start).Milliseconds(),
-			Capabilities: []string{"chat", "invoke"},
+			Capabilities: httpProbe.Capabilities,
+			Metadata:     httpProbe.Metadata,
 		}
 	}
 
@@ -45,26 +48,48 @@ func ProbeEndpoint(endpoint string, opts fleet.ProbeOptions) fleet.ProbeResult {
 	}
 }
 
-func probeHTTP(client *http.Client, base string) bool {
-	paths := []string{"/healthz", "/health", "/v1/models", "/chat", "/invoke"}
-	for _, p := range paths {
-		code, _ := request(client, http.MethodGet, joinURL(base, p), nil)
-		if code >= 200 && code < 500 {
-			return true
+func probeHTTP(client *http.Client, base string) fleet.ProbeResult {
+	capabilities := []string{}
+	metadata := map[string]string{}
+
+	if code, body := request(client, http.MethodGet, joinURL(base, "/v1/models"), nil); isOpenAIModelsStatus(code) {
+		capabilities = append(capabilities, "openai-chat")
+		metadata["chatPath"] = "/v1/chat/completions"
+		if model := firstOpenAIModel(body); model != "" {
+			metadata["model"] = model
 		}
 	}
-	return false
+
+	if code, _ := request(client, http.MethodGet, joinURL(base, "/chat"), nil); isInteractiveEndpointStatus(code) {
+		capabilities = append(capabilities, "chat")
+		metadata["chatPath"] = "/chat"
+	}
+
+	if code, _ := request(client, http.MethodGet, joinURL(base, "/invoke"), nil); isInteractiveEndpointStatus(code) {
+		capabilities = append(capabilities, "invoke")
+	}
+
+	if len(capabilities) == 0 {
+		return fleet.ProbeResult{}
+	}
+	if len(metadata) == 0 {
+		metadata = nil
+	}
+	return fleet.ProbeResult{
+		Healthy:      true,
+		Protocol:     "http",
+		Capabilities: capabilities,
+		Metadata:     metadata,
+	}
 }
 
 func probeMCP(client *http.Client, base string) bool {
-	paths := []string{"/mcp/health", "/mcp/invoke"}
-	for _, p := range paths {
-		code, _ := request(client, http.MethodGet, joinURL(base, p), nil)
-		if code >= 200 && code < 500 {
-			return true
-		}
+	healthCode, _ := request(client, http.MethodGet, joinURL(base, "/mcp/health"), nil)
+	if healthCode >= 200 && healthCode < 300 {
+		return true
 	}
-	return false
+	invokeCode, _ := request(client, http.MethodGet, joinURL(base, "/mcp/invoke"), nil)
+	return isInteractiveEndpointStatus(invokeCode)
 }
 
 func request(client *http.Client, method, url string, body io.Reader) (int, string) {
@@ -77,7 +102,8 @@ func request(client *http.Client, method, url string, body io.Reader) (int, stri
 		return 0, err.Error()
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode, ""
+	out, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(out)
 }
 
 func joinURL(base, path string) string {
@@ -87,4 +113,30 @@ func joinURL(base, path string) string {
 		p = "/" + p
 	}
 	return fmt.Sprintf("%s%s", b, p)
+}
+
+func isInteractiveEndpointStatus(code int) bool {
+	return (code >= 200 && code < 300) || code == http.StatusUnauthorized || code == http.StatusForbidden || code == http.StatusMethodNotAllowed
+}
+
+func isOpenAIModelsStatus(code int) bool {
+	return (code >= 200 && code < 300) || code == http.StatusUnauthorized || code == http.StatusForbidden
+}
+
+func firstOpenAIModel(body string) string {
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		return ""
+	}
+	if len(payload.Data) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(payload.Data[0].ID)
 }

@@ -79,10 +79,10 @@ kubectl get agentworkflows,agentworkflowruns,eventsources,integrationendpoints,d
 ## 5) Run CLI health checks
 
 ```bash
-./bin/agscale doctor -n default
-./bin/agscale get agents -n default
-./bin/agscale get workflows -n default
-./bin/agscale get runs -n default
+./bin/agscale cluster doctor -n default
+./bin/agscale cluster get agents -n default
+./bin/agscale cluster get workflows -n default
+./bin/agscale cluster get runs -n default
 ```
 
 ## 6) Trigger and inspect team orchestration
@@ -102,7 +102,7 @@ Create a manual run:
 Get run status:
 
 ```bash
-./bin/agscale get runs -n default
+./bin/agscale cluster get runs -n default
 ./bin/agscale team status <RUN_NAME_FROM_PREVIOUS_COMMAND> -n default
 ```
 
@@ -114,18 +114,14 @@ Notes:
 ## 7) Use TUI for live operations
 
 ```bash
-./bin/agscale tui agent support-agent -n default
+./bin/agscale tui
+./bin/agscale cluster tui agent support-agent -n default
 ```
 
 Inside TUI, available actions:
 
-- `r`: refresh
-- `l`: show recent logs
-- `c`: chat with the agent (`POST /chat`)
-- `x`: restart one pod
-- `s`: scale replicas
-- `f`: fail over to backup LLM endpoint
-- `q`: quit
+- top-level `tui` lets you select from both cluster agents and fleet inventory agents
+- `cluster tui agent <name>` supports `/refresh`, `/logs`, `/restart`, `/scale <n>`, `/failover`, `/raw`, `/quit`
 
 ## 8) Optional: Deploy clawdbot/moltbot demo with OpenClaw overlay (official image)
 

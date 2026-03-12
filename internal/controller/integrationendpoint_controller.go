@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	agscalev1alpha1 "agscale/api/v1alpha1"
@@ -38,9 +39,10 @@ func (r *IntegrationEndpointReconciler) Reconcile(ctx context.Context, req ctrl.
 	endpoint.Status.ObservedGeneration = endpoint.Generation
 	endpoint.Status.LastHealthCheckTime = &now
 
-	if endpoint.Spec.Connection.URL == "" {
+	probeURL := integrationProbeURL(endpoint)
+	if probeURL == "" {
 		endpoint.Status.Ready = false
-		endpoint.Status.LastError = "connection.url is empty"
+		endpoint.Status.LastError = "connection.url or a2a.baseURL is required"
 		setConditionWorkflow(&endpoint.Status.Conditions, metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse, Reason: "MissingURL", Message: endpoint.Status.LastError, LastTransitionTime: now, ObservedGeneration: endpoint.Generation})
 		if err := r.Status().Update(ctx, endpoint); err != nil {
 			result = "error"
@@ -56,14 +58,15 @@ func (r *IntegrationEndpointReconciler) Reconcile(ctx context.Context, req ctrl.
 		timeout = 5 * time.Second
 	}
 	transport := &http.Transport{}
-	if endpoint.Spec.Connection.TLS.InsecureSkipVerify {
+	tlsConfig := integrationProbeTLS(endpoint)
+	if tlsConfig.InsecureSkipVerify {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	hc := r.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: timeout, Transport: transport}
 	}
-	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.Spec.Connection.URL, nil)
+	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
 	if err != nil {
 		endpoint.Status.Ready = false
 		endpoint.Status.LastError = err.Error()
@@ -72,13 +75,13 @@ func (r *IntegrationEndpointReconciler) Reconcile(ctx context.Context, req ctrl.
 		integrationHealthChecksTotal.WithLabelValues(endpoint.Name, "error").Inc()
 		return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
 	}
-	for k, v := range endpoint.Spec.Connection.Headers {
+	for k, v := range integrationProbeHeaders(endpoint) {
 		reqHTTP.Header.Set(k, v)
 	}
-	if endpoint.Spec.Connection.Auth.SecretRef != nil && endpoint.Spec.Connection.Auth.SecretRef.Name != "" {
+	if secretRef := integrationProbeSecretRef(endpoint); secretRef != nil && secretRef.Name != "" {
 		secret := &corev1.Secret{}
-		if err := r.Get(ctx, client.ObjectKey{Namespace: endpoint.Namespace, Name: endpoint.Spec.Connection.Auth.SecretRef.Name}, secret); err == nil {
-			key := endpoint.Spec.Connection.Auth.SecretRef.Key
+		if err := r.Get(ctx, client.ObjectKey{Namespace: endpoint.Namespace, Name: secretRef.Name}, secret); err == nil {
+			key := secretRef.Key
 			if key == "" {
 				key = "token"
 			}
@@ -125,4 +128,56 @@ func (r *IntegrationEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&agscalev1alpha1.IntegrationEndpoint{}).
 		Complete(r)
+}
+
+func integrationProbeURL(endpoint *agscalev1alpha1.IntegrationEndpoint) string {
+	if endpoint == nil {
+		return ""
+	}
+	if url := strings.TrimSpace(endpoint.Spec.Connection.URL); url != "" {
+		return url
+	}
+	return strings.TrimSpace(endpoint.Spec.A2A.BaseURL)
+}
+
+func integrationProbeTLS(endpoint *agscalev1alpha1.IntegrationEndpoint) agscalev1alpha1.IntegrationTLS {
+	if endpoint == nil {
+		return agscalev1alpha1.IntegrationTLS{}
+	}
+	if strings.TrimSpace(endpoint.Spec.Connection.URL) != "" {
+		return endpoint.Spec.Connection.TLS
+	}
+	return endpoint.Spec.A2A.TLS
+}
+
+func integrationProbeHeaders(endpoint *agscalev1alpha1.IntegrationEndpoint) map[string]string {
+	headers := map[string]string{}
+	if endpoint == nil {
+		return headers
+	}
+	for k, v := range endpoint.Spec.Connection.Headers {
+		headers[k] = v
+	}
+	if strings.TrimSpace(endpoint.Spec.Connection.URL) == "" {
+		for k, v := range endpoint.Spec.A2A.Headers {
+			headers[k] = v
+		}
+	}
+	return headers
+}
+
+func integrationProbeSecretRef(endpoint *agscalev1alpha1.IntegrationEndpoint) *agscalev1alpha1.SecretKeyReference {
+	if endpoint == nil {
+		return nil
+	}
+	if strings.TrimSpace(endpoint.Spec.Connection.URL) != "" {
+		if endpoint.Spec.Connection.Auth.SecretRef != nil {
+			return endpoint.Spec.Connection.Auth.SecretRef
+		}
+		return endpoint.Spec.A2A.Auth.SecretRef
+	}
+	if endpoint.Spec.A2A.Auth.SecretRef != nil {
+		return endpoint.Spec.A2A.Auth.SecretRef
+	}
+	return endpoint.Spec.Connection.Auth.SecretRef
 }

@@ -75,13 +75,14 @@ For `AgentWorkflow`/`AgentWorkflowRun`:
 
 For `IntegrationEndpoint`:
 
-1. Controller probes `spec.connection.url` on a fixed interval.
+1. Controller probes `spec.connection.url` on a fixed interval, or `spec.a2a.baseURL` for A2A-only integrations.
 2. Updates `status.ready`, `status.lastError`, and readiness condition.
 
 For `EventSource`:
 
-1. Controller validates target workflow and emits `AgentWorkflowRun` objects periodically.
-2. Trigger cadence defaults to 300s and can be set with annotation `agscale.io/interval-seconds`.
+1. Controller validates target workflow, integration readiness, and `delivery.mode` before emitting `AgentWorkflowRun` objects.
+2. `delivery.mode` currently supports `Polling`; trigger cadence defaults to 300s and can be set with annotation `agscale.io/interval-seconds`.
+3. Triggered runs carry event-source metadata in annotations (`event-source`, integration, topic, filter, delivery mode) for downstream inspection.
 
 ## AI-SRE Reliability Techniques Implemented
 

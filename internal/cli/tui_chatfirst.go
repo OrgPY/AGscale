@@ -59,7 +59,13 @@ func runAgentTUIChatFirst(client ctrlclient.Client, kc *kubernetes.Clientset, na
 	info := ""
 
 	for {
-		renderChatFirstScreen(agent, transcript, info, showRaw)
+		renderChatFirstScreen(
+			newClusterTUITarget(agent),
+			transcript,
+			info,
+			showRaw,
+			[]string{"/refresh", "/logs", "/restart", "/scale <n>", "/failover", "/raw", "/quit"},
+		)
 		fmt.Print("chat> ")
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -147,7 +153,7 @@ func runAgentTUIChatFirst(client ctrlclient.Client, kc *kubernetes.Clientset, na
 		}
 
 		transcript = append(transcript, tuiChatLine{role: "user", text: input})
-		resp, err := sendAgentChatMessage(agent, input, pf)
+		resp, err := sendTUIChatMessage(newClusterTUITarget(agent), input, pf)
 		if err != nil {
 			transcript = append(transcript, tuiChatLine{
 				role: "system",
@@ -173,20 +179,22 @@ type chatResponse struct {
 	latency    time.Duration
 }
 
-func sendAgentChatMessage(agent *agscalev1alpha1.Agent, prompt string, pf *tuiPortForwardSession) (chatResponse, error) {
-	baseURL, path, err := resolveChatEndpoint(agent, pf)
+func sendTUIChatMessage(target tuiAgentTarget, prompt string, pf *tuiPortForwardSession) (chatResponse, error) {
+	baseURL, path, err := resolveTUIChatEndpoint(target, pf)
 	if err != nil {
 		return chatResponse{}, err
 	}
 
-	payload := map[string]string{"message": prompt}
-	body, _ := json.Marshal(payload)
+	body, err := buildChatRequestBody(target.Name, prompt, path, target.Model)
+	if err != nil {
+		return chatResponse{}, err
+	}
 	req, err := http.NewRequest(http.MethodPost, baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return chatResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token, ok := chatTokenFromEnv(agent.Name); ok {
+	if token, ok := chatTokenFromEnv(target.Name); ok {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
@@ -205,22 +213,22 @@ func sendAgentChatMessage(agent *agscalev1alpha1.Agent, prompt string, pf *tuiPo
 	}, nil
 }
 
-func resolveChatEndpoint(agent *agscalev1alpha1.Agent, pf *tuiPortForwardSession) (baseURL string, path string, err error) {
-	if agent == nil || agent.Status.URL == "" {
-		return "", "", fmt.Errorf("agent status url empty")
+func resolveTUIChatEndpoint(target tuiAgentTarget, pf *tuiPortForwardSession) (baseURL string, path string, err error) {
+	if strings.TrimSpace(target.Endpoint) == "" {
+		return "", "", fmt.Errorf("agent endpoint empty")
 	}
-	path = agent.Annotations["agscale.io/chat-path"]
+	path = target.ChatPath
 	if path == "" {
 		path = "/chat"
 	}
-	baseURL = strings.TrimSuffix(agent.Status.URL, "/")
-	if override, ok := chatBaseURLFromEnv(agent.Name); ok {
+	baseURL = strings.TrimSuffix(target.Endpoint, "/")
+	if override, ok := chatBaseURLFromEnv(target.Name); ok {
 		baseURL = strings.TrimSuffix(override, "/")
 	}
 
-	if isClusterLocalURL(baseURL) {
+	if target.Source == tuiTargetSourceCluster && isClusterLocalURL(baseURL) {
 		if pf.url == "" {
-			localURL, cleanup, err := startServicePortForward(agent.Namespace, agent.Name)
+			localURL, cleanup, err := startServicePortForward(target.Namespace, target.Name, servicePortFromURL(baseURL))
 			if err != nil {
 				return "", "", fmt.Errorf("auto port-forward failed: %w", err)
 			}
@@ -255,20 +263,17 @@ func extractMessage(raw string) string {
 	return raw
 }
 
-func renderChatFirstScreen(agent *agscalev1alpha1.Agent, transcript []tuiChatLine, info string, showRaw bool) {
+func renderChatFirstScreen(target tuiAgentTarget, transcript []tuiChatLine, info string, showRaw bool, options []string) {
+	const innerWidth = 75
+
 	fmt.Print("\033[2J\033[H")
 	fmt.Println("┌─────────────────────────────────────────────────────────────────────────────┐")
-	fmt.Printf("│ AGScale TUI  %s/%s", agent.Namespace, agent.Name)
-	padding := 76 - len(agent.Namespace) - len(agent.Name) - len(" AGScale TUI  /")
-	if padding < 1 {
-		padding = 1
-	}
-	fmt.Print(strings.Repeat(" ", padding))
-	fmt.Println("│")
+	printTUILine("AGScale TUI  " + target.DisplayName)
 	fmt.Println("├─────────────────────────────────────────────────────────────────────────────┤")
-	fmt.Printf("│ ReadyReplicas: %-3d  Budget: %-10s  URL: %-30s │\n", agent.Status.ReadyReplicas, safe(agent.Status.BudgetPhase), truncate(agent.Status.URL, 30))
+	printTUILine("Status: " + target.statusSummary())
+	printTUILine("Endpoint: " + safe(target.Endpoint))
 	fmt.Println("├─────────────────────────────────────────────────────────────────────────────┤")
-	fmt.Println("│ Chat (direct input)                                                        │")
+	printTUILine("Chat (direct input)")
 
 	lines := transcript
 	if len(lines) > 10 {
@@ -286,16 +291,20 @@ func renderChatFirstScreen(agent *agscalev1alpha1.Agent, transcript []tuiChatLin
 		if showRaw && line.raw != "" {
 			content = line.raw
 		}
-		msg := truncate(strings.ReplaceAll(content, "\n", " "), 68)
-		fmt.Printf("│ %-3s: %-68s │\n", role, msg)
+		msg := truncate(strings.ReplaceAll(content, "\n", " "), innerWidth-7)
+		printTUILine(fmt.Sprintf("%-3s: %s", role, msg))
 		if line.meta != "" {
-			fmt.Printf("│      %-68s │\n", truncate(line.meta, 68))
+			printTUILine("     " + truncate(line.meta, innerWidth-5))
 		}
 	}
 	fmt.Println("├─────────────────────────────────────────────────────────────────────────────┤")
-	fmt.Printf("│ Options: /refresh /logs /restart /scale <n> /failover /raw /quit          │\n")
-	fmt.Printf("│ Mode: %-12s  Info: %-54s │\n", map[bool]string{true: "raw-json", false: "smart-text"}[showRaw], truncate(info, 54))
+	printTUILine("Options: " + strings.Join(options, " "))
+	printTUILine("Mode: " + map[bool]string{true: "raw-json", false: "smart-text"}[showRaw] + "  Info: " + info)
 	fmt.Println("└─────────────────────────────────────────────────────────────────────────────┘")
+}
+
+func printTUILine(content string) {
+	fmt.Printf("│ %-75s │\n", truncate(content, 75))
 }
 
 func splitCommand(input string) (cmd, arg string) {

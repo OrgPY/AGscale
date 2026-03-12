@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -171,16 +172,18 @@ func invoke(agent fleet.AgentRecord, step Step, input map[string]any, timeoutSec
 		timeoutSec = 20
 	}
 	client := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second}
-	body, _ := json.Marshal(map[string]any{
-		"task":     input["task"],
-		"step":     step.Name,
-		"stepType": step.StepType,
-		"input":    input,
-	})
 
 	endpoints := resolveEndpoints(agent)
 	var lastErr error
 	for _, ep := range endpoints {
+		body, err := buildInvokeRequestBody(agent, step, input, ep)
+		if err != nil {
+			if isOpenAIChatCompletionsEndpoint(ep) {
+				return nil, err
+			}
+			lastErr = err
+			continue
+		}
 		req, err := http.NewRequest(http.MethodPost, ep, bytes.NewReader(body))
 		if err != nil {
 			lastErr = err
@@ -217,7 +220,22 @@ func resolveEndpoints(agent fleet.AgentRecord) []string {
 	if agent.Protocol == "mcp" {
 		return []string{base + "/mcp/invoke"}
 	}
-	return []string{base + "/chat", base + "/invoke", base + "/v1/chat/completions"}
+	paths := []string{}
+	if agent.Metadata != nil && strings.TrimSpace(agent.Metadata["chatPath"]) != "" {
+		paths = append(paths, normalizeEndpointPath(agent.Metadata["chatPath"]))
+	}
+	paths = append(paths, "/chat", "/invoke", "/v1/chat/completions")
+
+	seen := map[string]bool{}
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, base+path)
+	}
+	return out
 }
 
 func RankAgents(in []fleet.AgentRecord, requireSkills []string, maxAgents int) []fleet.AgentRecord {
@@ -278,4 +296,78 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func buildInvokeRequestBody(agent fleet.AgentRecord, step Step, input map[string]any, endpoint string) ([]byte, error) {
+	if isOpenAIChatCompletionsEndpoint(endpoint) {
+		model, err := schedulerOpenAIModel(agent)
+		if err != nil {
+			return nil, err
+		}
+		content, _ := json.Marshal(map[string]any{
+			"task":     input["task"],
+			"step":     step.Name,
+			"stepType": step.StepType,
+			"input":    input,
+		})
+		return json.Marshal(map[string]any{
+			"model": model,
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": string(content),
+				},
+			},
+		})
+	}
+
+	return json.Marshal(map[string]any{
+		"task":     input["task"],
+		"step":     step.Name,
+		"stepType": step.StepType,
+		"input":    input,
+	})
+}
+
+func schedulerOpenAIModel(agent fleet.AgentRecord) (string, error) {
+	keyBase := strings.ToUpper(strings.ReplaceAll(firstNonEmpty(agent.Name, agent.ID), "-", "_"))
+	if keyBase != "" {
+		if v := strings.TrimSpace(os.Getenv("AGSCALE_OPENAI_MODEL_" + keyBase)); v != "" {
+			return v, nil
+		}
+	}
+	if agent.Metadata != nil {
+		for _, key := range []string{"model", "defaultModel"} {
+			if v := strings.TrimSpace(agent.Metadata[key]); v != "" {
+				return v, nil
+			}
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("AGSCALE_OPENAI_MODEL")); v != "" {
+		return v, nil
+	}
+	return "", fmt.Errorf("openai-compatible endpoint for agent %q requires model metadata or AGSCALE_OPENAI_MODEL", firstNonEmpty(agent.Name, agent.ID))
+}
+
+func isOpenAIChatCompletionsEndpoint(endpoint string) bool {
+	return strings.HasSuffix(strings.TrimSuffix(endpoint, "/"), "/v1/chat/completions")
+}
+
+func normalizeEndpointPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "/") {
+		return path
+	}
+	return "/" + path
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -46,15 +47,22 @@ func Execute(args []string) error {
 		return nil
 	case "opencode":
 		return runOpenCode(args[1:])
+	case "cluster":
+		return runCluster(args[1:])
 	case "get":
+		warnDeprecated("agscale get", "agscale cluster get")
 		return runGet(args[1:])
 	case "describe":
+		warnDeprecated("agscale describe", "agscale cluster describe")
 		return runDescribe(args[1:])
 	case "logs":
+		warnDeprecated("agscale logs", "agscale cluster logs")
 		return runLogs(args[1:])
 	case "apply":
+		warnDeprecated("agscale apply", "agscale cluster apply")
 		return runApply(args[1:])
 	case "doctor":
+		warnDeprecated("agscale doctor", "agscale cluster doctor")
 		return runDoctor(args[1:])
 	case "team":
 		return runTeam(args[1:])
@@ -79,11 +87,12 @@ Usage:
 Commands:
   version                          Print CLI version
   opencode template                Print BYO OpenCode Secret + LLMEndpoint templates
-  doctor                           Validate cluster and CRDs availability
-  get <agents|workflows|runs|skills> [-n namespace]
-  describe agent <name> [-n namespace]
-  logs agent <name> [-n namespace] [--tail N]
-  apply -f <file> | -k <kustomize-dir> [-n namespace]
+  cluster doctor                   Validate cluster and CRDs availability
+  cluster get <agents|workflows|runs|skills> [-n namespace]
+  cluster describe agent <name> [-n namespace]
+  cluster logs agent <name> [-n namespace] [--tail N]
+  cluster apply -f <file> | -k <kustomize-dir> [-n namespace]
+  cluster tui agent <name> [-n namespace]
   team init <team-name> [-n namespace] [--profile openclaw|openhands|openai] [--out file] [--apply]
   team up <team-name> [-n namespace] [--profile openclaw|openhands|openai] [--out file]
   team validate -f <bundle.yaml> [-n namespace]
@@ -96,7 +105,11 @@ Commands:
   fleet list [--status healthy|degraded|unknown|all] [--protocol http|mcp|all]
   fleet inspect <agent-id-or-name>
   fleet run <task-name> [--agents a,b] [--selector k=v] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--dry-run]
-  tui agent <name> [-n namespace]
+  tui [<agent-id-or-name>] [--namespace default] [--inventory path]
+
+Deprecated aliases:
+  doctor|get|describe|logs|apply
+  tui agent <name>
 `)
 }
 
@@ -487,14 +500,14 @@ func runTeamGraph(args []string) error {
 	return nil
 }
 
-func runTUI(args []string) error {
+func runClusterTUI(args []string) error {
 	namespace := defaultNamespace
 	rest := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		switch {
 		case args[i] == "-n" || args[i] == "--namespace":
 			if i+1 >= len(args) {
-				return errors.New("usage: tui agent <name> [-n namespace]")
+				return errors.New("usage: cluster tui agent <name> [-n namespace]")
 			}
 			namespace = args[i+1]
 			i++
@@ -507,7 +520,7 @@ func runTUI(args []string) error {
 		}
 	}
 	if len(rest) < 2 || rest[0] != "agent" {
-		return errors.New("usage: tui agent <name>")
+		return errors.New("usage: cluster tui agent <name>")
 	}
 	client, kc, err := kubeClients()
 	if err != nil {
@@ -531,7 +544,7 @@ func runAgentChat(reader *bufio.Reader, agent *agscalev1alpha1.Agent) error {
 
 	cleanup := func() {}
 	if isClusterLocalURL(baseURL) {
-		localURL, closeFn, err := startServicePortForward(agent.Namespace, agent.Name)
+		localURL, closeFn, err := startServicePortForward(agent.Namespace, agent.Name, servicePortFromURL(baseURL))
 		if err != nil {
 			return fmt.Errorf("agent URL is cluster-local and auto port-forward failed: %w", err)
 		}
@@ -545,8 +558,10 @@ func runAgentChat(reader *bufio.Reader, agent *agscalev1alpha1.Agent) error {
 	if err != nil {
 		return err
 	}
-	payload := map[string]string{"message": strings.TrimSpace(prompt)}
-	body, _ := json.Marshal(payload)
+	body, err := buildChatRequestBody(agent.Name, strings.TrimSpace(prompt), path, "")
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequest(http.MethodPost, baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -588,6 +603,41 @@ func chatBaseURLFromEnv(agentName string) (string, bool) {
 	return "", false
 }
 
+func chatModelFromEnv(agentName string) (string, bool) {
+	key := "AGSCALE_OPENAI_MODEL_" + strings.ToUpper(strings.ReplaceAll(agentName, "-", "_"))
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v, true
+	}
+	if v := strings.TrimSpace(os.Getenv("AGSCALE_OPENAI_MODEL")); v != "" {
+		return v, true
+	}
+	return "", false
+}
+
+func buildChatRequestBody(agentName, prompt, path, model string) ([]byte, error) {
+	if isOpenAIChatPath(path) {
+		resolvedModel := strings.TrimSpace(model)
+		if resolvedModel == "" {
+			if envModel, ok := chatModelFromEnv(agentName); ok {
+				resolvedModel = envModel
+			}
+		}
+		if resolvedModel == "" {
+			return nil, fmt.Errorf("openai-compatible chat for %q requires model metadata or AGSCALE_OPENAI_MODEL", agentName)
+		}
+		return json.Marshal(map[string]any{
+			"model": resolvedModel,
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": prompt,
+				},
+			},
+		})
+	}
+	return json.Marshal(map[string]string{"message": prompt})
+}
+
 func isClusterLocalURL(raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -597,15 +647,38 @@ func isClusterLocalURL(raw string) bool {
 	return strings.HasSuffix(host, ".svc.cluster.local") || strings.HasSuffix(host, ".svc")
 }
 
-func startServicePortForward(namespace, serviceName string) (string, func(), error) {
+func isOpenAIChatPath(path string) bool {
+	return strings.HasSuffix(strings.TrimSuffix(path, "/"), "/v1/chat/completions")
+}
+
+func servicePortFromURL(raw string) int {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return 80
+	}
+	if port := strings.TrimSpace(u.Port()); port != "" {
+		if n, err := strconv.Atoi(port); err == nil && n > 0 && n <= 65535 {
+			return n
+		}
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return 443
+	}
+	return 80
+}
+
+func startServicePortForward(namespace, serviceName string, servicePort int) (string, func(), error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", nil, err
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close()
+	if servicePort <= 0 {
+		servicePort = 80
+	}
 
-	cmd := exec.Command("kubectl", "-n", namespace, "port-forward", "svc/"+serviceName, fmt.Sprintf("%d:80", port))
+	cmd := exec.Command("kubectl", "-n", namespace, "port-forward", "svc/"+serviceName, fmt.Sprintf("%d:%d", port, servicePort))
 	if err := cmd.Start(); err != nil {
 		return "", nil, err
 	}

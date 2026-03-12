@@ -71,18 +71,44 @@ func runSSHProbe(host, sshConfig string, ports []int, timeout int) []string {
 		portTokens = append(portTokens, fmt.Sprintf("%d", p))
 	}
 	script := fmt.Sprintf(`
+status() {
+  code="$(curl -s -o /dev/null -w '%%{http_code}' -m %d "$1" 2>/dev/null)"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    echo 000
+    return
+  fi
+  echo "$code"
+}
+is_http_endpoint() {
+  case "$1" in
+    2*|401|403|405) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+is_openai_models() {
+  case "$1" in
+    2*|401|403) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 for p in %s; do
   ep="http://127.0.0.1:${p}"
-  if curl -fsS -m %d "$ep/healthz" >/dev/null 2>&1 || curl -fsS -m %d "$ep/health" >/dev/null 2>&1 || curl -fsS -m %d "$ep/v1/models" >/dev/null 2>&1 ; then
+  chat_code="$(status "$ep/chat")"
+  invoke_code="$(status "$ep/invoke")"
+  models_code="$(status "$ep/v1/models")"
+  if is_http_endpoint "$chat_code" || is_http_endpoint "$invoke_code" || is_openai_models "$models_code" ; then
     echo "FOUND|http|$ep|"
     continue
   fi
-  if curl -fsS -m %d "$ep/mcp/health" >/dev/null 2>&1 || curl -fsS -m %d "$ep/mcp/invoke" >/dev/null 2>&1 ; then
+  mcp_health_code="$(status "$ep/mcp/health")"
+  mcp_invoke_code="$(status "$ep/mcp/invoke")"
+  if { [ "$mcp_health_code" -ge 200 ] && [ "$mcp_health_code" -lt 300 ]; } || is_http_endpoint "$mcp_invoke_code" ; then
     echo "FOUND|mcp|$ep|"
     continue
   fi
 done
-`, strings.Join(portTokens, " "), timeout, timeout, timeout, timeout, timeout)
+`, timeout, strings.Join(portTokens, " "))
 
 	args := []string{"-o", "BatchMode=yes"}
 	if strings.TrimSpace(sshConfig) != "" {

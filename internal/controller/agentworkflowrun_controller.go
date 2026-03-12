@@ -114,11 +114,8 @@ func (r *AgentWorkflowRunReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				continue
 			}
 			if governancePolicy != nil && len(governancePolicy.Spec.AllowedDestinations) > 0 {
-				target := ""
-				if step.AgentRef != nil {
-					target = step.AgentRef.Name
-				}
-				if !containsString(governancePolicy.Spec.AllowedDestinations, target) {
+				target := resolvedStepTargetName(step)
+				if !isAllowedWorkflowDestination(governancePolicy.Spec.AllowedDestinations, step) {
 					resultsByStep[step.Name] = agscalev1alpha1.WorkflowRunStepResult{
 						StepName: step.Name,
 						Status:   "Failed",
@@ -491,6 +488,13 @@ func resolvedStepTargetName(step agscalev1alpha1.WorkflowStepSpec) string {
 		return step.IntegrationRef.Name
 	}
 	return "unknown"
+}
+
+func isAllowedWorkflowDestination(allowed []string, step agscalev1alpha1.WorkflowStepSpec) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	return containsString(allowed, resolvedStepTargetName(step))
 }
 
 func (r *AgentWorkflowRunReconciler) resolveStepTarget(ctx context.Context, namespace string, step agscalev1alpha1.WorkflowStepSpec, agent *agscalev1alpha1.Agent) (baseURL string, authToken string, err error) {
