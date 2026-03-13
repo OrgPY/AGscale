@@ -168,7 +168,20 @@ jobs:
           chmod +x "${RUNNER_TEMP}/agscale-release/install-cli.sh"
           OWNER="${RELEASE_REPO%%/*}"
           NAME="${RELEASE_REPO#*/}"
-          cp .goreleaser-cli.yaml "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
+          awk '
+            {
+              if (skip && $0 ~ /^[^[:space:]]/) {
+                skip=0
+              }
+              if ($0 ~ /^before:$/) {
+                skip=1
+                next
+              }
+              if (!skip) {
+                print
+              }
+            }
+          ' .goreleaser-cli.yaml > "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
           {
             printf 'before:\n'
             printf '  hooks:\n'
