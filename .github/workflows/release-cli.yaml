@@ -186,7 +186,7 @@ jobs:
             printf 'before:\n'
             printf '  hooks:\n'
             printf '    - go mod tidy\n'
-            printf "    - sh -c 'mkdir -p dist && cp \"%s\" dist/install-cli.sh && chmod +x dist/install-cli.sh'\n" "${RUNNER_TEMP}/agscale-release/install-cli.sh"
+            printf "    - sh -c 'rm -rf .release-extra && mkdir -p .release-extra && cp \"%s\" .release-extra/install-cli.sh && chmod +x .release-extra/install-cli.sh'\n" "${RUNNER_TEMP}/agscale-release/install-cli.sh"
             printf 'release:\n'
             printf '  github:\n'
             printf '    owner: %s\n' "${OWNER}"
@@ -196,7 +196,7 @@ jobs:
             printf '  replace_existing_artifacts: true\n'
             printf '  target_commitish: %s\n' "${RELEASE_BRANCH}"
             printf '  extra_files:\n'
-            printf '    - glob: dist/install-cli.sh\n'
+            printf '    - glob: .release-extra/install-cli.sh\n'
           } >> "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
 
       - name: Setup Go
