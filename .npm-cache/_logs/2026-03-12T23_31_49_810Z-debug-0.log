@@ -1,0 +1,35 @@
+0 verbose cli /opt/homebrew/Cellar/node/25.4.0/bin/node /opt/homebrew/bin/npm
+1 info using npm@11.7.0
+2 info using node@v25.4.0
+3 silly config load:file:/opt/homebrew/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/yangpuyu/llm/agscale/npm/.npmrc
+5 silly config load:file:/Users/yangpuyu/.npmrc
+6 silly config load:file:/opt/homebrew/etc/npmrc
+7 verbose title npm pack
+8 verbose argv "pack" "--dry-run"
+9 verbose logfile logs-max:10 dir:/Users/yangpuyu/llm/agscale/.npm-cache/_logs/2026-03-12T23_31_49_810Z-
+10 verbose logfile /Users/yangpuyu/llm/agscale/.npm-cache/_logs/2026-03-12T23_31_49_810Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 notice
+14 notice 📦  @agscale/agscale@0.1.4
+15 notice Tarball Contents
+16 notice 337B README.md
+16 notice 4.6kB bin/agscale.js
+16 notice 564B package.json
+17 notice Tarball Details
+18 notice name: @agscale/agscale
+19 notice version: 0.1.4
+20 notice filename: agscale-agscale-0.1.4.tgz
+21 notice package size: 2.3 kB
+22 notice unpacked size: 5.5 kB
+23 notice shasum: 033f543d0aa73f2811daa644341e518889daec83
+24 notice integrity: sha512-Cdbw04yvE9PFO[...]TygGgFn+nDKCQ==
+25 notice total files: 3
+26 notice
+27 verbose cwd /Users/yangpuyu/llm/agscale/npm
+28 verbose os Darwin 24.6.0
+29 verbose node v25.4.0
+30 verbose npm  v11.7.0
+31 verbose exit 0
+32 info ok

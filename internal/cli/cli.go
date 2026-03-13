@@ -109,7 +109,7 @@ Commands:
 
 Deprecated aliases:
   doctor|get|describe|logs|apply
-  tui agent <name>
+  tui agent <name>                Use 'tui <name>'
 `)
 }
 

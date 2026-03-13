@@ -58,8 +58,8 @@ func runTUI(args []string) error {
 		if len(rest) != 2 {
 			return errors.New("usage: tui agent <name> [-n namespace]")
 		}
-		warnDeprecated("agscale tui agent <name>", "agscale cluster tui agent <name>")
-		return runClusterTUIFn([]string{"agent", rest[1], "-n", namespace})
+		warnDeprecated("agscale tui agent <name>", "agscale tui <name>")
+		rest = rest[1:]
 	}
 	if len(rest) > 1 {
 		return errors.New("usage: tui [<agent-id-or-name>] [--namespace default] [--inventory path]")
