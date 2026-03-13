@@ -162,9 +162,9 @@ jobs:
           RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
         run: |
           set -euo pipefail
-          mkdir -p dist
-          sed "s|^REPO=.*$|REPO=\"\${AGSCALE_RELEASE_REPO:-\${AGSCALE_REPO:-${RELEASE_REPO}}}\"|" hack/install-cli.sh > dist/install-cli.sh
-          chmod +x dist/install-cli.sh
+          mkdir -p "${RUNNER_TEMP}/agscale-release"
+          sed "s|^REPO=.*$|REPO=\"\${AGSCALE_RELEASE_REPO:-\${AGSCALE_REPO:-${RELEASE_REPO}}}\"|" hack/install-cli.sh > "${RUNNER_TEMP}/agscale-release/install-cli.sh"
+          chmod +x "${RUNNER_TEMP}/agscale-release/install-cli.sh"
 
       - name: Render GoReleaser Config
         env:
@@ -174,7 +174,7 @@ jobs:
           set -euo pipefail
           OWNER="${RELEASE_REPO%%/*}"
           NAME="${RELEASE_REPO#*/}"
-          cp .goreleaser-cli.yaml .goreleaser-cli.resolved.yaml
+          cp .goreleaser-cli.yaml "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
           {
             printf 'release:\n'
             printf '  github:\n'
@@ -185,8 +185,8 @@ jobs:
             printf '  replace_existing_artifacts: true\n'
             printf '  target_commitish: %s\n' "${RELEASE_BRANCH}"
             printf '  extra_files:\n'
-            printf '    - glob: ./dist/install-cli.sh\n'
-          } >> .goreleaser-cli.resolved.yaml
+            printf '    - glob: %s\n' "${RUNNER_TEMP}/agscale-release/install-cli.sh"
+          } >> "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -199,7 +199,7 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean --config .goreleaser-cli.resolved.yaml
+          args: release --clean --config "${{ runner.temp }}/agscale-release/goreleaser.yaml"
         env:
           GITHUB_TOKEN: ${{ env.GORELEASER_GITHUB_TOKEN }}
 
