@@ -157,25 +157,23 @@ jobs:
             echo "GORELEASER_GITHUB_TOKEN=${DEFAULT_GITHUB_TOKEN}" >> "$GITHUB_ENV"
           fi
 
-      - name: Render Public Install Script
-        env:
-          RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${RUNNER_TEMP}/agscale-release"
-          sed "s|^REPO=.*$|REPO=\"\${AGSCALE_RELEASE_REPO:-\${AGSCALE_REPO:-${RELEASE_REPO}}}\"|" hack/install-cli.sh > "${RUNNER_TEMP}/agscale-release/install-cli.sh"
-          chmod +x "${RUNNER_TEMP}/agscale-release/install-cli.sh"
-
       - name: Render GoReleaser Config
         env:
           RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
           RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
         run: |
           set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/agscale-release"
+          sed "s|^REPO=.*$|REPO=\"\${AGSCALE_RELEASE_REPO:-\${AGSCALE_REPO:-${RELEASE_REPO}}}\"|" hack/install-cli.sh > "${RUNNER_TEMP}/agscale-release/install-cli.sh"
+          chmod +x "${RUNNER_TEMP}/agscale-release/install-cli.sh"
           OWNER="${RELEASE_REPO%%/*}"
           NAME="${RELEASE_REPO#*/}"
           cp .goreleaser-cli.yaml "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
           {
+            printf 'before:\n'
+            printf '  hooks:\n'
+            printf '    - go mod tidy\n'
+            printf "    - sh -c 'mkdir -p dist && cp \"%s\" dist/install-cli.sh && chmod +x dist/install-cli.sh'\n" "${RUNNER_TEMP}/agscale-release/install-cli.sh"
             printf 'release:\n'
             printf '  github:\n'
             printf '    owner: %s\n' "${OWNER}"
@@ -185,7 +183,7 @@ jobs:
             printf '  replace_existing_artifacts: true\n'
             printf '  target_commitish: %s\n' "${RELEASE_BRANCH}"
             printf '  extra_files:\n'
-            printf '    - glob: %s\n' "${RUNNER_TEMP}/agscale-release/install-cli.sh"
+            printf '    - glob: dist/install-cli.sh\n'
           } >> "${RUNNER_TEMP}/agscale-release/goreleaser.yaml"
 
       - name: Setup Go
