@@ -14,6 +14,7 @@ import (
 	"time"
 
 	agscalev1alpha1 "agscale/api/v1alpha1"
+	"agscale/internal/fleet"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -29,6 +30,7 @@ type tuiChatLine struct {
 
 type tuiPortForwardSession struct {
 	url     string
+	key     string
 	cleanup func()
 }
 
@@ -37,6 +39,7 @@ func (s *tuiPortForwardSession) close() {
 		s.cleanup()
 	}
 	s.url = ""
+	s.key = ""
 	s.cleanup = nil
 }
 
@@ -179,6 +182,8 @@ type chatResponse struct {
 	latency    time.Duration
 }
 
+const tuiChatHTTPTimeout = 45 * time.Second
+
 func sendTUIChatMessage(target tuiAgentTarget, prompt string, pf *tuiPortForwardSession) (chatResponse, error) {
 	baseURL, path, err := resolveTUIChatEndpoint(target, pf)
 	if err != nil {
@@ -199,12 +204,15 @@ func sendTUIChatMessage(target tuiAgentTarget, prompt string, pf *tuiPortForward
 	}
 
 	start := time.Now()
-	resp, err := (&http.Client{Timeout: 45 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: tuiChatHTTPTimeout}).Do(req)
 	if err != nil {
 		return chatResponse{}, err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return chatResponse{}, fmt.Errorf("reading response body: %w", readErr)
+	}
 	return chatResponse{
 		text:       extractMessage(strings.TrimSpace(string(raw))),
 		raw:        strings.TrimSpace(string(raw)),
@@ -237,6 +245,28 @@ func resolveTUIChatEndpoint(target tuiAgentTarget, pf *tuiPortForwardSession) (b
 		}
 		baseURL = pf.url
 	}
+	if target.Source == tuiTargetSourceFleet && target.Reachability == fleet.ReachabilitySSHLoopback && strings.TrimSpace(target.Endpoint) != "" {
+		tunnelKey := tunnelCacheKey(target.Host, target.Endpoint)
+		if pf.url == "" || pf.key != tunnelKey {
+			pf.close()
+			localURL, cleanup, err := startFleetSSHTunnelFn(fleet.AgentRecord{
+				ID:           target.ID,
+				Name:         target.Name,
+				Host:         target.Host,
+				HostID:       target.HostID,
+				Protocol:     target.Protocol,
+				Endpoint:     target.Endpoint,
+				Reachability: target.Reachability,
+			}, resolveFleetTUITargetSSHConfig(target))
+			if err != nil {
+				return "", "", fmt.Errorf("auto ssh tunnel failed: %w", err)
+			}
+			pf.url = localURL
+			pf.key = tunnelKey
+			pf.cleanup = cleanup
+		}
+		baseURL = pf.url
+	}
 	return baseURL, path, nil
 }
 
@@ -261,6 +291,13 @@ func extractMessage(raw string) string {
 		return v
 	}
 	return raw
+}
+
+func resolveFleetTUITargetSSHConfig(target tuiAgentTarget) string {
+	if strings.TrimSpace(target.SSHConfigPath) != "" {
+		return target.SSHConfigPath
+	}
+	return defaultFleetSSHConfig()
 }
 
 func renderChatFirstScreen(target tuiAgentTarget, transcript []tuiChatLine, info string, showRaw bool, options []string) {
@@ -321,7 +358,10 @@ func splitCommand(input string) (cmd, arg string) {
 
 func confirm(reader *bufio.Reader, prompt string) bool {
 	fmt.Print(prompt)
-	line, _ := reader.ReadString('\n')
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
 	line = strings.TrimSpace(strings.ToLower(line))
 	return line == "y" || line == "yes"
 }

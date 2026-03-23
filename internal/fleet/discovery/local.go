@@ -1,7 +1,7 @@
 package discovery
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/url"
@@ -55,17 +55,24 @@ func ScanLocalAgentAware(opts fleet.ProbeOptions, ports []int, signatures []stri
 		if !probe.Healthy {
 			continue
 		}
+		model := strings.TrimSpace(probe.Metadata["model"])
 		record := fleet.AgentRecord{
-			ID:           stableID("local", probe.Protocol, endpoint),
-			Name:         inferNameWithEngine("local", probe.Protocol, endpoint, proc.EngineTag),
-			Host:         "local",
-			Source:       "local-scan",
-			Protocol:     probe.Protocol,
-			Endpoint:     endpoint,
-			Health:       fleet.HealthHealthy,
-			LatencyMs:    probe.LatencyMs,
-			Capabilities: probe.Capabilities,
-			LastSeenAt:   now,
+			ID:             stableID("local", probe.Protocol, endpoint),
+			Name:           inferNameWithEngine("local", probe.Protocol, endpoint, proc.EngineTag),
+			Host:           "local",
+			HostID:         fleet.StableHostID("local"),
+			Source:         "local-scan",
+			Protocol:       probe.Protocol,
+			Endpoint:       endpoint,
+			EndpointSource: fleet.EndpointSourceDiscovered,
+			Reachability:   fleet.ReachabilityDirect,
+			Health:         fleet.HealthHealthy,
+			LatencyMs:      probe.LatencyMs,
+			Engine:         proc.EngineTag,
+			Runtime:        "process",
+			Model:          model,
+			Capabilities:   probe.Capabilities,
+			LastSeenAt:     now,
 			Labels: map[string]string{
 				"scope":        "local",
 				"discovery":    "process-aware",
@@ -75,11 +82,15 @@ func ScanLocalAgentAware(opts fleet.ProbeOptions, ports []int, signatures []stri
 			Metadata: map[string]string{
 				"pid": strconv.Itoa(proc.PID),
 			},
+			Resources: fleet.ResourceSnapshot{
+				Ports:  portsForEndpoint(endpoint),
+				Models: nonEmptyStrings(model),
+			},
 		}
 		for k, v := range probe.Metadata {
 			record.Metadata[k] = v
 		}
-		out = append(out, record)
+		out = append(out, fleet.RememberDiscoveredAgent(record))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Endpoint < out[j].Endpoint })
 	return out
@@ -97,33 +108,43 @@ func ScanLocal(endpoints []string, opts fleet.ProbeOptions) []fleet.AgentRecord 
 		uniq[e] = true
 		probe := protocol.ProbeEndpoint(e, opts)
 		record := fleet.AgentRecord{
-			ID:           stableID("local", probe.Protocol, e),
-			Name:         inferName("local", probe.Protocol, e),
-			Host:         "local",
-			Source:       "local-scan",
-			Protocol:     probe.Protocol,
-			Endpoint:     e,
-			Health:       fleet.HealthUnknown,
-			LatencyMs:    probe.LatencyMs,
-			Capabilities: probe.Capabilities,
-			LastSeenAt:   now,
-			LastError:    probe.LastError,
-			Labels:       map[string]string{"scope": "local"},
-			Metadata:     probe.Metadata,
+			ID:             stableID("local", probe.Protocol, e),
+			Name:           inferName("local", probe.Protocol, e),
+			Host:           "local",
+			HostID:         fleet.StableHostID("local"),
+			Source:         "local-scan",
+			Protocol:       probe.Protocol,
+			Endpoint:       e,
+			EndpointSource: fleet.EndpointSourceDiscovered,
+			Reachability:   fleet.ReachabilityDirect,
+			Health:         fleet.HealthUnknown,
+			LatencyMs:      probe.LatencyMs,
+			Engine:         inferEngine(probe),
+			Runtime:        "process",
+			Model:          strings.TrimSpace(probe.Metadata["model"]),
+			Capabilities:   probe.Capabilities,
+			LastSeenAt:     now,
+			LastError:      probe.LastError,
+			Labels:         map[string]string{"scope": "local"},
+			Metadata:       probe.Metadata,
+			Resources: fleet.ResourceSnapshot{
+				Ports:  portsForEndpoint(e),
+				Models: nonEmptyStrings(strings.TrimSpace(probe.Metadata["model"])),
+			},
 		}
 		if probe.Healthy {
 			record.Health = fleet.HealthHealthy
 		} else {
 			record.Health = fleet.HealthDegraded
 		}
-		out = append(out, record)
+		out = append(out, fleet.RememberDiscoveredAgent(record))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Endpoint < out[j].Endpoint })
 	return out
 }
 
 func LocalDefaultEndpoints() []string {
-	ports := []int{18789, 8080, 8000, 3000, 5000, 11434}
+	ports := DefaultAgentPorts()
 	out := make([]string, 0, len(ports))
 	for _, p := range ports {
 		out = append(out, fmt.Sprintf("http://127.0.0.1:%d", p))
@@ -131,12 +152,16 @@ func LocalDefaultEndpoints() []string {
 	return out
 }
 
+func DefaultAgentPorts() []int {
+	return []int{18789, 8080, 8000, 3000, 5000, 11434}
+}
+
 func DefaultAgentSignatures() []string {
 	return []string{"openclaw", "opencode", "claude", "aider", "mcp", "autogen", "langchain"}
 }
 
 func stableID(host, protocol, endpoint string) string {
-	h := sha1.Sum([]byte(host + "|" + protocol + "|" + endpoint))
+	h := sha256.Sum256([]byte(host + "|" + protocol + "|" + endpoint))
 	return hex.EncodeToString(h[:10])
 }
 
@@ -313,4 +338,44 @@ func appendUniquePort(in []int, p int) []int {
 		}
 	}
 	return append(in, p)
+}
+
+func portsForEndpoint(endpoint string) []int {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil || port <= 0 {
+		return nil
+	}
+	return []int{port}
+}
+
+func nonEmptyStrings(items ...string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if strings.TrimSpace(item) != "" {
+			out = append(out, strings.TrimSpace(item))
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func inferEngine(probe fleet.ProbeResult) string {
+	if probe.Metadata != nil {
+		if strings.TrimSpace(probe.Metadata["model"]) != "" {
+			return "openai-compatible"
+		}
+		if strings.TrimSpace(probe.Metadata["chatPath"]) == "/chat" {
+			return "chat-http"
+		}
+	}
+	if len(probe.Capabilities) > 0 && probe.Capabilities[0] == "mcp-invoke" {
+		return "mcp"
+	}
+	return ""
 }

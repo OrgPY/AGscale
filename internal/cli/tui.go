@@ -34,19 +34,23 @@ var (
 )
 
 type tuiAgentTarget struct {
-	ID            string
-	Name          string
-	Namespace     string
-	Host          string
-	DisplayName   string
-	Source        string
-	Protocol      string
-	Endpoint      string
-	Health        string
-	BudgetPhase   string
-	ReadyReplicas int32
-	ChatPath      string
-	Model         string
+	ID             string
+	Name           string
+	Namespace      string
+	Host           string
+	HostID         string
+	DisplayName    string
+	Source         string
+	Protocol       string
+	Endpoint       string
+	EndpointSource string
+	Reachability   string
+	Health         string
+	BudgetPhase    string
+	ReadyReplicas  int32
+	ChatPath       string
+	Model          string
+	SSHConfigPath  string
 }
 
 func runTUI(args []string) error {
@@ -250,16 +254,19 @@ func newFleetTUITarget(agent fleet.AgentRecord) tuiAgentTarget {
 		scope = "inventory"
 	}
 	return tuiAgentTarget{
-		ID:          agent.ID,
-		Name:        display,
-		Host:        agent.Host,
-		DisplayName: fmt.Sprintf("%s [%s %s]", display, tuiTargetSourceFleet, scope),
-		Source:      tuiTargetSourceFleet,
-		Protocol:    agent.Protocol,
-		Endpoint:    agent.Endpoint,
-		Health:      agent.Health,
-		ChatPath:    chatPath,
-		Model:       model,
+		ID:             agent.ID,
+		Name:           display,
+		Host:           agent.Host,
+		HostID:         agent.HostID,
+		DisplayName:    fmt.Sprintf("%s [%s %s]", display, tuiTargetSourceFleet, scope),
+		Source:         tuiTargetSourceFleet,
+		Protocol:       agent.Protocol,
+		Endpoint:       agent.Endpoint,
+		EndpointSource: agent.EndpointSource,
+		Reachability:   agent.Reachability,
+		Health:         agent.Health,
+		ChatPath:       chatPath,
+		Model:          model,
 	}
 }
 
@@ -471,6 +478,9 @@ func (t tuiAgentTarget) selectorStatus() string {
 		}
 	} else if t.Health != "" {
 		parts = append(parts, "health="+t.Health)
+		if t.Reachability != "" {
+			parts = append(parts, "reachability="+t.Reachability)
+		}
 	}
 	if t.Protocol != "" {
 		parts = append(parts, "proto="+t.Protocol)
@@ -544,6 +554,7 @@ func runInventoryAgentTUIChatFirst(target tuiAgentTarget, inventoryPath string) 
 				showRaw = !showRaw
 				info = fmt.Sprintf("raw-json view: %t", showRaw)
 			case "/refresh":
+				pf.close()
 				refreshed, err := refreshInventoryTUITarget(inventoryPath, current)
 				if err != nil {
 					info = "refresh failed: " + err.Error()
@@ -584,6 +595,7 @@ func refreshInventoryTUITarget(inventoryPath string, target tuiAgentTarget) (tui
 	}
 	for _, candidate := range targets {
 		if candidate.ID == target.ID {
+			candidate.SSHConfigPath = target.SSHConfigPath
 			return candidate, nil
 		}
 	}

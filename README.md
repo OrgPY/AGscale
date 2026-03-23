@@ -144,9 +144,12 @@ Common commands:
 ./bin/agscale team command-center incident-401 -n default --selector 'agscale.io/domain=support' --require-skills web-search --max-agents 3 --topology dag --apply --run
 ./bin/agscale team validate -f support-team-easy.yaml -n default
 ./bin/agscale team watch support-team-easy-run-<timestamp> -n default
-./bin/agscale fleet scan --local --scan-mode agent-aware --write
-./bin/agscale fleet list --status healthy
+./bin/agscale fleet agent scan --local --scan-mode agent-aware --write
+./bin/agscale fleet host list
+./bin/agscale fleet agent list --status healthy
+./bin/agscale fleet agent pin support-agent --endpoint https://agent.example --reachability direct
 ./bin/agscale fleet run incident-401 --selector 'scope=local' --max-agents 4 --topology dag --explain-selection --dry-run
+./bin/agscale fleet run history --limit 10
 ./bin/agscale tui
 ./bin/agscale cluster tui agent support-agent -n default
 ./bin/agscale opencode template --base-url https://your-opencode-endpoint.example/v1 --model your-opencode-model
@@ -158,6 +161,7 @@ TUI notes:
 - `cluster tui agent <name>` keeps the Kubernetes operator view with status, logs, chat, restart-pod, scale, and backup-LLM failover actions.
 - Chat uses `Agent.status.url` and defaults to `POST /chat`.
 - Override chat path with annotation `agscale.io/chat-path`.
+- Fleet inventory agents discovered on remote hosts can now be reached through automatic SSH local tunnels when their saved endpoint is remote loopback-only.
 
 Workflow run notes:
 

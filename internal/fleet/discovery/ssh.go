@@ -24,8 +24,8 @@ func ScanSSHHosts(hosts []string, sshConfig string, ports []int, opts fleet.Prob
 		lines := runSSHProbe(h, sshConfig, ports, timeout)
 		now := time.Now().UTC()
 		for _, line := range lines {
-			parts := strings.Split(line, "|")
-			if len(parts) < 4 || parts[0] != "FOUND" {
+			parts := strings.SplitN(line, "|", 4)
+			if len(parts) != 4 || parts[0] != "FOUND" {
 				continue
 			}
 			proto := parts[1]
@@ -36,30 +36,66 @@ func ScanSSHHosts(hosts []string, sshConfig string, ports []int, opts fleet.Prob
 				health = fleet.HealthDegraded
 			}
 			rec := fleet.AgentRecord{
-				ID:         stableID(h, proto, endpoint),
-				Name:       inferName(h, proto, endpoint),
-				Host:       h,
-				Source:     "ssh-scan",
-				Protocol:   proto,
-				Endpoint:   endpoint,
-				Health:     health,
-				LastSeenAt: now,
-				LastError:  lastErr,
+				ID:             stableID(h, proto, endpoint),
+				Name:           inferName(h, proto, endpoint),
+				Host:           h,
+				HostID:         fleet.StableHostID(h),
+				Source:         "ssh-scan",
+				Protocol:       proto,
+				Endpoint:       endpoint,
+				EndpointSource: fleet.EndpointSourceDiscovered,
+				Reachability:   fleet.ReachabilitySSHLoopback,
+				Health:         health,
+				Runtime:        "ssh",
+				LastSeenAt:     now,
+				LastError:      lastErr,
 				Labels: map[string]string{
 					"scope": "ssh",
 					"host":  h,
 				},
+				Resources: fleet.ResourceSnapshot{
+					Ports: portsForEndpoint(endpoint),
+				},
 			}
 			if proto == "http" {
 				rec.Capabilities = []string{"chat", "invoke"}
+				rec.Engine = "chat-http"
 			}
 			if proto == "mcp" {
 				rec.Capabilities = []string{"mcp-invoke"}
+				rec.Engine = "mcp"
 			}
-			out = append(out, rec)
+			out = append(out, fleet.RememberDiscoveredAgent(rec))
 		}
 	}
 	return out
+}
+
+func CheckSSHHost(host, sshConfig string, timeout int) error {
+	target := strings.TrimSpace(host)
+	if target == "" {
+		return fmt.Errorf("empty host")
+	}
+	if timeout <= 0 {
+		timeout = 5
+	}
+	args := []string{
+		"-o", "BatchMode=yes",
+		"-o", fmt.Sprintf("ConnectTimeout=%d", timeout),
+	}
+	if strings.TrimSpace(sshConfig) != "" {
+		args = append(args, "-F", sshConfig)
+	}
+	args = append(args, target, "sh", "-lc", "hostname >/dev/null && echo ok")
+	cmd := exec.Command("ssh", args...)
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ssh probe failed: %s", sanitizeLine(string(b)))
+	}
+	if strings.TrimSpace(string(b)) == "" {
+		return fmt.Errorf("ssh probe failed: empty response")
+	}
+	return nil
 }
 
 func runSSHProbe(host, sshConfig string, ports []int, timeout int) []string {

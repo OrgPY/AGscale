@@ -35,6 +35,8 @@ import (
 
 const defaultNamespace = "default"
 
+var cliVersion = "0.2.0"
+
 func Execute(args []string) error {
 	if len(args) == 0 {
 		printUsage()
@@ -43,7 +45,7 @@ func Execute(args []string) error {
 
 	switch args[0] {
 	case "version":
-		fmt.Println("agscale cli v0.2.0")
+		fmt.Printf("agscale cli v%s\n", cliVersion)
 		return nil
 	case "opencode":
 		return runOpenCode(args[1:])
@@ -101,10 +103,18 @@ Commands:
   team status <run-name> [-n namespace]
   team graph <workflow> [-n namespace]
   team command-center <task-name> [-n namespace] [--selector k=v] [--agents a,b] [--exclude-agents x,y] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--entry-agent name] [--protocol http|mcp|a2a] [--out file] [--apply] [--run] [--explain-selection]
-  fleet scan [--local] [--hosts host1,host2] [--scan-mode agent-aware|ports] [--signatures openclaw,opencode,...] [--ssh-config ~/.ssh/config] [--ports 18789,8080] [--write]
-  fleet list [--status healthy|degraded|unknown|all] [--protocol http|mcp|all]
-  fleet inspect <agent-id-or-name>
-  fleet run <task-name> [--agents a,b] [--selector k=v] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--dry-run]
+  fleet agent scan [--local] [--hosts host1,host2] [--scan-mode agent-aware|ports] [--signatures openclaw,opencode,...] [--ssh-config ~/.ssh/config] [--ports 18789,8080] [--write]
+  fleet agent list [--status healthy|degraded|unknown|all] [--protocol http|mcp|all]
+  fleet agent inspect <agent-id-or-name>
+  fleet agent chat <agent-id-or-name> [--message "hello"] [--ssh-config ~/.ssh/config]
+  fleet agent pin <agent-id-or-name> --endpoint <url> [--reachability direct|ssh-loopback] [--protocol http|mcp] [--chat-path /chat]
+  fleet agent unpin <agent-id-or-name>
+  fleet host add <name> [--address host-or-alias] [--ssh-profile profile] [--labels k=v]
+  fleet host list [--status healthy|degraded|unknown|all]
+  fleet host doctor [<host-id-or-name>] [--write]
+  fleet run <task-name> [--agents a,b] [--selector k=v] [--require-skills s1,s2] [--max-agents 3] [--topology dag|sequential] [--dry-run] [--ssh-config ~/.ssh/config]
+  fleet run history [--limit 20]
+  fleet run inspect <run-id>
   tui [<agent-id-or-name>] [--namespace default] [--inventory path]
 
 Deprecated aliases:
@@ -575,7 +585,10 @@ func runAgentChat(reader *bufio.Reader, agent *agscalev1alpha1.Agent) error {
 		return err
 	}
 	defer resp.Body.Close()
-	out, _ := io.ReadAll(resp.Body)
+	out, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("reading response: %w", readErr)
+	}
 	fmt.Printf("response (%d):\n%s\n", resp.StatusCode, strings.TrimSpace(string(out)))
 	pause(reader)
 	return nil

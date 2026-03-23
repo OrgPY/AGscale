@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"agscale/internal/fleet"
 )
 
 func TestResolveDirectTUITargetsPrefersClusterByName(t *testing.T) {
@@ -210,5 +212,63 @@ func TestRunTUINoAgentsReturnsRecoveryHint(t *testing.T) {
 		if !strings.Contains(msg, needle) {
 			t.Fatalf("expected error %q to contain %q", msg, needle)
 		}
+	}
+}
+
+func TestResolveTUIChatEndpointUsesFleetTunnelForSSHLoopback(t *testing.T) {
+	t.Parallel()
+
+	orig := startFleetSSHTunnelFn
+	t.Cleanup(func() {
+		startFleetSSHTunnelFn = orig
+	})
+
+	calls := 0
+	startFleetSSHTunnelFn = func(agent fleet.AgentRecord, sshConfigPath string) (string, func(), error) {
+		calls++
+		if agent.Host != "devbox-1" {
+			t.Fatalf("expected host devbox-1, got %q", agent.Host)
+		}
+		if sshConfigPath != "/tmp/ssh-config" {
+			t.Fatalf("expected ssh config /tmp/ssh-config, got %q", sshConfigPath)
+		}
+		return "http://127.0.0.1:49000", func() {}, nil
+	}
+
+	target := tuiAgentTarget{
+		ID:            "agent-1",
+		Name:          "agent-1",
+		Host:          "devbox-1",
+		Source:        tuiTargetSourceFleet,
+		Protocol:      "http",
+		Endpoint:      "http://127.0.0.1:18789",
+		Reachability:  fleet.ReachabilitySSHLoopback,
+		SSHConfigPath: "/tmp/ssh-config",
+	}
+	pf := &tuiPortForwardSession{}
+
+	baseURL, path, err := resolveTUIChatEndpoint(target, pf)
+	if err != nil {
+		t.Fatalf("resolveTUIChatEndpoint returned error: %v", err)
+	}
+	if baseURL != "http://127.0.0.1:49000" {
+		t.Fatalf("expected tunneled base URL, got %q", baseURL)
+	}
+	if path != "/chat" {
+		t.Fatalf("expected default chat path, got %q", path)
+	}
+	if calls != 1 {
+		t.Fatalf("expected one tunnel start, got %d", calls)
+	}
+
+	baseURL, _, err = resolveTUIChatEndpoint(target, pf)
+	if err != nil {
+		t.Fatalf("second resolveTUIChatEndpoint returned error: %v", err)
+	}
+	if baseURL != "http://127.0.0.1:49000" {
+		t.Fatalf("expected tunnel reuse, got %q", baseURL)
+	}
+	if calls != 1 {
+		t.Fatalf("expected reused tunnel, got %d starts", calls)
 	}
 }

@@ -36,6 +36,8 @@ type RunOptions struct {
 	DryRun         bool
 }
 
+const defaultInvokeTimeout = 20 * time.Second
+
 func BuildPlan(agents []fleet.AgentRecord, topology string) []Step {
 	if len(agents) == 0 {
 		return nil
@@ -66,6 +68,10 @@ func BuildPlan(agents []fleet.AgentRecord, topology string) []Step {
 		steps = append(steps, Step{Name: "response", AgentID: agents[1].ID, StepType: "Transform", Depends: []string{"retrieve"}})
 		return steps
 	}
+	if len(agents) == 3 {
+		steps = append(steps, Step{Name: "response", AgentID: agents[2].ID, StepType: "Transform", Depends: []string{"triage", "retrieve"}})
+		return steps
+	}
 
 	if len(agents) >= 4 {
 		steps = append(steps, Step{Name: "solve", AgentID: agents[2].ID, StepType: "Transform", Depends: []string{"triage", "retrieve"}})
@@ -88,6 +94,7 @@ func Execute(task string, agentsByID map[string]fleet.AgentRecord, plan []Step, 
 	if len(plan) == 0 {
 		return nil, fmt.Errorf("empty plan")
 	}
+	httpClient := &http.Client{Timeout: resolveInvokeTimeout(opts.TimeoutSeconds)}
 	resultsByName := map[string]StepResult{}
 	completed := map[string]bool{}
 
@@ -137,7 +144,7 @@ func Execute(task string, agentsByID map[string]fleet.AgentRecord, plan []Step, 
 			}
 
 			start := time.Now()
-			out, err := invoke(agent, step, input, opts.TimeoutSeconds)
+			out, err := invoke(httpClient, agent, step, input)
 			result := StepResult{Name: step.Name, AgentID: step.AgentID, DurationMs: time.Since(start).Milliseconds()}
 			if err != nil {
 				result.Status = "Failed"
@@ -167,11 +174,17 @@ func Execute(task string, agentsByID map[string]fleet.AgentRecord, plan []Step, 
 	return out, nil
 }
 
-func invoke(agent fleet.AgentRecord, step Step, input map[string]any, timeoutSec int) (map[string]any, error) {
+func resolveInvokeTimeout(timeoutSec int) time.Duration {
 	if timeoutSec <= 0 {
-		timeoutSec = 20
+		return defaultInvokeTimeout
 	}
-	client := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second}
+	return time.Duration(timeoutSec) * time.Second
+}
+
+func invoke(client *http.Client, agent fleet.AgentRecord, step Step, input map[string]any) (map[string]any, error) {
+	if client == nil {
+		client = &http.Client{Timeout: defaultInvokeTimeout}
+	}
 
 	endpoints := resolveEndpoints(agent)
 	var lastErr error
@@ -195,12 +208,18 @@ func invoke(agent fleet.AgentRecord, step Step, input map[string]any, timeoutSec
 			lastErr = err
 			continue
 		}
-		b, _ := io.ReadAll(resp.Body)
+		b, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if readErr != nil {
+			lastErr = fmt.Errorf("%s response read error: %w", ep, readErr)
+			continue
+		}
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			out := map[string]any{}
-			if len(b) > 0 && json.Unmarshal(b, &out) != nil {
-				out["raw"] = string(b)
+			if len(b) > 0 {
+				if jsonErr := json.Unmarshal(b, &out); jsonErr != nil {
+					out = map[string]any{"raw": string(b)}
+				}
 			}
 			if len(out) == 0 {
 				out["ok"] = true
@@ -263,10 +282,43 @@ func RankAgents(in []fleet.AgentRecord, requireSkills []string, maxAgents int) [
 		}
 		return tmp[i].agent.Name < tmp[j].agent.Name
 	})
+
 	out := make([]fleet.AgentRecord, 0, len(tmp))
-	for _, s := range tmp {
-		out = append(out, s.agent)
+	seenHosts := map[string]bool{}
+	selectedAgents := map[string]bool{}
+	appendIfNeeded := func(agent fleet.AgentRecord) bool {
 		if maxAgents > 0 && len(out) >= maxAgents {
+			return false
+		}
+		if selectedAgents[agent.ID] {
+			return true
+		}
+		out = append(out, agent)
+		selectedAgents[agent.ID] = true
+		hostKey := strings.TrimSpace(agent.HostID)
+		if hostKey == "" {
+			hostKey = strings.TrimSpace(agent.Host)
+		}
+		if hostKey != "" {
+			seenHosts[hostKey] = true
+		}
+		return true
+	}
+
+	for _, s := range tmp {
+		hostKey := strings.TrimSpace(s.agent.HostID)
+		if hostKey == "" {
+			hostKey = strings.TrimSpace(s.agent.Host)
+		}
+		if hostKey != "" && seenHosts[hostKey] {
+			continue
+		}
+		if !appendIfNeeded(s.agent) {
+			return out
+		}
+	}
+	for _, s := range tmp {
+		if !appendIfNeeded(s.agent) {
 			break
 		}
 	}
@@ -289,13 +341,6 @@ func skillMatch(a fleet.AgentRecord, required []string) (int, bool) {
 		hits++
 	}
 	return hits, true
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func buildInvokeRequestBody(agent fleet.AgentRecord, step Step, input map[string]any, endpoint string) ([]byte, error) {
