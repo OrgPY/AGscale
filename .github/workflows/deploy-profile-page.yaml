@@ -1,0 +1,150 @@
+name: deploy-profile-page
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "site/**"
+      - ".github/workflows/deploy-profile-page.yaml"
+  workflow_dispatch:
+    inputs:
+      release_repo:
+        description: "GitHub repo that should host the public Pages site, e.g. OrgPY/agscale-releases. Defaults to AGSCALE_PUBLIC_RELEASE_REPO or this repo."
+        required: false
+        type: string
+      pages_branch:
+        description: "Branch to force-push static Pages output to. Defaults to AGSCALE_PUBLIC_PAGES_BRANCH or gh-pages."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: profile-page-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Pages Target
+        id: target
+        shell: bash
+        env:
+          DEFAULT_REPO: ${{ github.repository }}
+          INPUT_RELEASE_REPO: ${{ github.event.inputs.release_repo || '' }}
+          INPUT_PAGES_BRANCH: ${{ github.event.inputs.pages_branch || '' }}
+          VAR_RELEASE_REPO: ${{ vars.AGSCALE_PUBLIC_RELEASE_REPO || '' }}
+          VAR_PAGES_BRANCH: ${{ vars.AGSCALE_PUBLIC_PAGES_BRANCH || '' }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_REPO="${INPUT_RELEASE_REPO:-${VAR_RELEASE_REPO:-${DEFAULT_REPO}}}"
+          PAGES_BRANCH="${INPUT_PAGES_BRANCH:-${VAR_PAGES_BRANCH:-gh-pages}}"
+
+          if [[ ! "${RELEASE_REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "invalid release repo: ${RELEASE_REPO} (expected owner/repo)" >&2
+            exit 1
+          fi
+
+          if [[ ! "${PAGES_BRANCH}" =~ ^[A-Za-z0-9._/-]+$ || "${PAGES_BRANCH}" == *..* ]]; then
+            echo "invalid pages branch: ${PAGES_BRANCH}" >&2
+            exit 1
+          fi
+
+          {
+            echo "release_repo=${RELEASE_REPO}"
+            echo "pages_branch=${PAGES_BRANCH}"
+            if [[ "${RELEASE_REPO}" == "${DEFAULT_REPO}" ]]; then
+              echo "use_actions_pages=true"
+            else
+              echo "use_actions_pages=false"
+            fi
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build Static Site
+        shell: bash
+        env:
+          CUSTOM_DOMAIN: ${{ vars.AGSCALE_PUBLIC_PAGES_CNAME || '' }}
+        run: |
+          set -euo pipefail
+
+          rm -rf .pages-dist
+          mkdir -p .pages-dist
+          cp -R site/. .pages-dist/
+          touch .pages-dist/.nojekyll
+
+          if [[ -n "${CUSTOM_DOMAIN}" ]]; then
+            printf '%s\n' "${CUSTOM_DOMAIN}" > .pages-dist/CNAME
+          fi
+
+      - name: Upload Current Repo Pages Artifact
+        if: steps.target.outputs.use_actions_pages == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Current Repo GitHub Pages
+        if: steps.target.outputs.use_actions_pages == 'true'
+        id: current_pages
+        uses: actions/deploy-pages@v4
+
+      - name: Deploy to Release Repo Pages Branch
+        if: steps.target.outputs.use_actions_pages != 'true'
+        shell: bash
+        env:
+          PAGES_BRANCH: ${{ steps.target.outputs.pages_branch }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.AGSCALE_PUBLIC_RELEASE_TOKEN || '' }}
+          RELEASE_REPO: ${{ steps.target.outputs.release_repo }}
+          SOURCE_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${RELEASE_REPO}" != "${SOURCE_REPO}" && -z "${PUBLIC_RELEASE_TOKEN}" ]]; then
+            echo "AGSCALE_PUBLIC_RELEASE_TOKEN is required to deploy Pages to ${RELEASE_REPO}" >&2
+            exit 1
+          fi
+
+          TOKEN="${PUBLIC_RELEASE_TOKEN}"
+          if [[ -z "${TOKEN}" ]]; then
+            echo "a token is required to push Pages output" >&2
+            exit 1
+          fi
+
+          cd .pages-dist
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${PAGES_BRANCH}"
+          git add -A
+          git commit -m "Deploy AGScale profile page"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${RELEASE_REPO}.git"
+          git push --force origin "HEAD:${PAGES_BRANCH}"
+
+      - name: Deployment Summary
+        shell: bash
+        env:
+          PAGES_BRANCH: ${{ steps.target.outputs.pages_branch }}
+          RELEASE_REPO: ${{ steps.target.outputs.release_repo }}
+          USE_ACTIONS_PAGES: ${{ steps.target.outputs.use_actions_pages }}
+        run: |
+          {
+            echo "## AGScale profile page"
+            echo
+            if [[ "${USE_ACTIONS_PAGES}" == "true" ]]; then
+              echo "Deployed static output to the current repository with GitHub Pages Actions."
+              echo
+              echo "Configure this repository's GitHub Pages source to use GitHub Actions."
+            else
+              echo "Deployed static output to \`${RELEASE_REPO}\` branch \`${PAGES_BRANCH}\`."
+              echo
+              echo "Configure the release repo GitHub Pages source to deploy from \`${PAGES_BRANCH}\` and \`/\`."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

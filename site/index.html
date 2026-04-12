@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AGScale | Kubernetes-native AI agent operations</title>
+    <meta
+      name="description"
+      content="AGScale is a Kubernetes-native framework for deploying, governing, and operating AI agents with reusable platform resources."
+    >
+    <meta property="og:title" content="AGScale">
+    <meta
+      property="og:description"
+      content="Deploy, govern, and operate AI agents with Kubernetes custom resources."
+    >
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://opengraph.githubassets.com/agscale-profile/OrgPY/AGscale">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#" aria-label="AGScale home">
+        <span class="brand-mark" aria-hidden="true">AG</span>
+        <span>AGScale</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#install">Install</a>
+        <a href="https://github.com/OrgPY/AGscale/releases">Releases</a>
+        <a href="https://www.npmjs.com/package/@agscale/agscale">npm</a>
+        <a href="https://github.com/OrgPY/AGscale">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Kubernetes-native agent operations</p>
+          <h1 id="hero-title">Run AI agents like production workloads.</h1>
+          <p class="hero-lede">
+            AGScale turns agents, model endpoints, memory, context, skills, budgets, and reliability policy into
+            first-class Kubernetes resources.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button button-primary" href="#install">Install CLI</a>
+            <a class="button button-secondary" href="https://github.com/OrgPY/AGscale/releases">Download releases</a>
+          </div>
+        </div>
+
+        <figure class="repo-figure">
+          <img
+            src="https://opengraph.githubassets.com/agscale-profile/OrgPY/AGscale"
+            alt="AGScale GitHub repository preview"
+            width="1200"
+            height="630"
+          >
+          <figcaption>Public release channel for AGScale CLI binaries and install assets.</figcaption>
+        </figure>
+      </section>
+
+      <section class="signal-band" aria-label="AGScale project signals">
+        <article>
+          <span class="signal-kicker">API surface</span>
+          <strong>14 custom resources</strong>
+          <p>Agents, runtimes, LLM endpoints, memory stores, skills, events, workflows, and policy objects.</p>
+        </article>
+        <article>
+          <span class="signal-kicker">Runtime path</span>
+          <strong>Controller + CLI</strong>
+          <p>Reconcile agents into Kubernetes workloads, then operate them through cluster and fleet commands.</p>
+        </article>
+        <article>
+          <span class="signal-kicker">Release path</span>
+          <strong>GitHub Releases + npm</strong>
+          <p>Install with native release binaries directly or run the CLI through the public npm wrapper.</p>
+        </article>
+      </section>
+
+      <section class="split-section" aria-labelledby="workflow-title">
+        <div>
+          <p class="eyebrow">Control plane</p>
+          <h2 id="workflow-title">Separate platform defaults from app-team intent.</h2>
+        </div>
+        <ol class="workflow-list">
+          <li>
+            <span>01</span>
+            <div>
+              <h3>Platform teams define the shared layer.</h3>
+              <p>Runtime images, model credentials, memory backends, context providers, skill registries, and policy defaults stay reusable.</p>
+            </div>
+          </li>
+          <li>
+            <span>02</span>
+            <div>
+              <h3>App teams request agent behavior.</h3>
+              <p>An Agent or AgentWorkflow references the platform layer and declares workload shape, skills, dependencies, and limits.</p>
+            </div>
+          </li>
+          <li>
+            <span>03</span>
+            <div>
+              <h3>Kubernetes reconciles the result.</h3>
+              <p>The controller creates Deployments, Services, optional autoscaling, status conditions, and remediation history.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section id="install" class="install-section" aria-labelledby="install-title">
+        <div>
+          <p class="eyebrow">Fast path</p>
+          <h2 id="install-title">Start from the public CLI package.</h2>
+          <p>
+            Use npx for a no-install run, or download pinned binaries from the release channel when automation needs a fixed artifact.
+          </p>
+        </div>
+        <div class="terminal" role="group" aria-label="Install command">
+          <div class="terminal-top">
+            <span>shell</span>
+            <button type="button" class="copy-button" data-copy="npx @agscale/agscale version">Copy</button>
+          </div>
+          <pre><code>npx @agscale/agscale version</code></pre>
+        </div>
+      </section>
+
+      <section class="links-section" aria-labelledby="links-title">
+        <h2 id="links-title">Project resources</h2>
+        <div class="resource-grid">
+          <a href="https://github.com/OrgPY/AGscale">
+            <span>Source</span>
+            <strong>github.com/OrgPY/AGscale</strong>
+          </a>
+          <a href="https://github.com/OrgPY/AGscale/releases">
+            <span>Binaries</span>
+            <strong>GitHub Releases</strong>
+          </a>
+          <a href="https://www.npmjs.com/package/@agscale/agscale">
+            <span>Wrapper</span>
+            <strong>@agscale/agscale</strong>
+          </a>
+          <a href="https://github.com/OrgPY/AGscale/blob/main/docs/architecture.md">
+            <span>Design</span>
+            <strong>Architecture notes</strong>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>AGScale is built for teams bringing agent workloads into Kubernetes operations.</p>
+      <a href="https://github.com/OrgPY/AGscale/issues">Open an issue</a>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

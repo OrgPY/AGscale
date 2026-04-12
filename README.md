@@ -269,6 +269,18 @@ To publish release assets from a private source repo into a separate public GitH
 
 When `AGSCALE_PUBLIC_RELEASE_REPO` is set, GoReleaser publishes to that repo and uploads a rendered `install-cli.sh` asset that defaults to the public release repo.
 
+## Public Profile Page
+
+Static profile page source lives in `site/`.
+
+Workflow `.github/workflows/deploy-profile-page.yaml` deploys the page to GitHub Pages:
+
+- target repo: `AGSCALE_PUBLIC_RELEASE_REPO`, or the current repo when unset
+- external target branch: `AGSCALE_PUBLIC_PAGES_BRANCH`, or `gh-pages` when unset
+- optional custom domain: `AGSCALE_PUBLIC_PAGES_CNAME`
+
+When the target repo is the current repo, configure GitHub Pages to use GitHub Actions as its source. For a separate public release repo, reuse `AGSCALE_PUBLIC_RELEASE_TOKEN` with `contents:write` permission on that repo, and configure GitHub Pages in that repo to deploy from the target branch root, usually `gh-pages` and `/`.
+
 ## NPM / NPX
 
 NPM wrapper package path: `npm/` (package: `@agscale/agscale`).
