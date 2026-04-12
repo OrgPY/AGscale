@@ -1,0 +1,19 @@
+# AGScale: Bringing Production-Grade Governance to AI Agents
+
+## Project Description
+
+AI agents are moving quickly from demos to real business workflows, but most organizations still operate them like experiments. That creates a gap between what AI systems can do and what companies can responsibly deploy. Agents rely on models, tools, memory, context, and external integrations, yet teams often lack clear ways to manage cost, reliability, access controls, and failure recovery. My project, AGScale, addresses that gap by treating AI agents as production workloads rather than one-off scripts.
+
+AGScale is a Kubernetes-native framework for deploying and operating AI agents with reusable platform controls. Instead of hard-coding everything into a single application, AGScale separates the main parts of an agent system into reusable components: agent runtime, model endpoint, memory, context providers, skills/tools, workflows, and policy layers for reliability, budget, and tool governance. The project already includes a working controller, CLI, and examples for multi-agent workflows, team orchestration, and fleet operations across both Kubernetes and non-Kubernetes environments. The goal of this funding period is to turn AGScale from a strong technical prototype into a more complete platform for evaluating how organizations can scale agentic systems safely and efficiently.
+
+## Problem or Opportunity
+
+The problem I am addressing is practical and timely. Businesses want to use AI agents for customer support, internal operations, research, and incident response, but they are hesitant to rely on systems they cannot govern. A useful agent is not just a prompt connected to a model; it is an operational system with uptime risks, budget exposure, tool-access risk, and quality variability across providers. AGScale focuses on this operational layer. I want to test whether AI agents can be managed with the same discipline that companies use for other production systems: clear deployment rules, auditable configuration, cost guardrails, failover behavior, and workflow visibility.
+
+## How I Plan to Use AI Tools
+
+I would use AI tool subscriptions in three main ways. First, I would use frontier AI coding and reasoning tools to accelerate development of new AGScale features, especially around workflow generation, policy enforcement, and operator usability. Second, I would use multiple AI tools and models to benchmark how different providers behave within a governed agent platform, including tradeoffs in quality, latency, reliability, and cost. Third, I would use AI tools to generate test cases, synthetic workloads, and documentation so that the project can be evaluated against realistic business scenarios instead of isolated demos. This is important because AGScale is not just a model experiment; it is an operating layer for model-driven systems, so cross-tool comparison is part of the project itself.
+
+## Potential Impact or Outcome
+
+The expected outcome is a stronger open-source prototype and a clearer answer to a business question that many firms are now facing: how do you move from AI experimentation to AI operations? By the end of the project period, I expect to deliver (1) expanded AGScale functionality for multi-agent workflows and fleet operations, (2) example business use cases such as support triage or incident-response coordination, (3) practical evaluation of governance and cost controls across AI tools, and (4) a short summary of lessons learned for managers and builders interested in deploying AI responsibly. The broader impact is helping organizations think about AI systems not only in terms of capability, but also in terms of operating model, accountability, and scale. That makes AGScale both a technical build and a management-focused exploration of how AI can be adopted more responsibly in real organizations.

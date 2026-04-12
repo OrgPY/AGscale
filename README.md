@@ -281,7 +281,7 @@ Workflow `.github/workflows/deploy-profile-page.yaml` deploys the page to GitHub
 
 When the target repo is the current repo, configure GitHub Pages to use GitHub Actions as its source. For a separate public release repo, reuse `AGSCALE_PUBLIC_RELEASE_TOKEN` with `contents:write` permission on that repo, and configure GitHub Pages in that repo to deploy from the target branch root, usually `gh-pages` and `/`.
 
-The deployed site also builds a documentation portal at `/docs/`. `site/build-docs.mjs` converts `README.md` and `docs/*.md` into static HTML during the workflow, so updates to repository docs are included in the next Pages deployment.
+The deployed site also builds a documentation portal at `/docs/`. `site/build-docs.mjs` converts `README.md` and `docs/*.md` into static HTML, adds a CLI reference from the current command surface, and adds an API reference from `config/crd/bases/*.yaml`. Updates to repository docs, CLI code, or CRD manifests are included in the next Pages deployment.
 
 Local preview:
 

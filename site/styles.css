@@ -369,7 +369,7 @@ pre {
 
 .docs-shell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   min-height: calc(100vh - 76px);
 }
 
@@ -395,9 +395,11 @@ pre {
 .docs-sidebar nav {
   display: grid;
   gap: 8px;
+  align-items: start;
 }
 
 .docs-sidebar nav a {
+  display: block;
   padding: 9px 10px;
   border-radius: 6px;
   color: var(--muted);
@@ -422,12 +424,14 @@ pre {
 }
 
 .docs-hero {
-  max-width: 900px;
+  max-width: 980px;
   margin-bottom: 54px;
 }
 
 .docs-hero h1 {
-  max-width: 13ch;
+  max-width: 820px;
+  font-size: 3.4rem;
+  line-height: 1.06;
 }
 
 .docs-hero p {
@@ -448,6 +452,7 @@ pre {
 }
 
 .doc-card {
+  display: block;
   min-height: 180px;
   padding: 20px;
   border: 2px solid var(--ink);
@@ -496,7 +501,9 @@ pre {
 }
 
 .doc-content h1 {
-  max-width: 14ch;
+  max-width: 860px;
+  font-size: 3.1rem;
+  line-height: 1.08;
 }
 
 .doc-content h2,
@@ -580,6 +587,7 @@ pre {
 .doc-content pre {
   position: relative;
   padding-top: 50px;
+  white-space: pre;
   border: 2px solid var(--ink);
   border-radius: 8px;
   background: #141613;
@@ -747,6 +755,11 @@ pre {
 
   h2 {
     font-size: 2.05rem;
+  }
+
+  .docs-hero h1,
+  .doc-content h1 {
+    font-size: 2.3rem;
   }
 
   .signal-band,

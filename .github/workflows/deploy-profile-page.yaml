@@ -5,6 +5,12 @@ on:
     branches:
       - main
     paths:
+      - "README.md"
+      - "api/v1alpha1/**"
+      - "cmd/agscale/**"
+      - "config/crd/bases/**"
+      - "docs/**"
+      - "internal/cli/**"
       - "site/**"
       - ".github/workflows/deploy-profile-page.yaml"
   workflow_dispatch:
