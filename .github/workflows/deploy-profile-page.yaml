@@ -34,6 +34,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Resolve Pages Target
         id: target
         shell: bash
@@ -79,6 +84,8 @@ jobs:
           rm -rf .pages-dist
           mkdir -p .pages-dist
           cp -R site/. .pages-dist/
+          node site/build-docs.mjs .pages-dist
+          rm -f .pages-dist/build-docs.mjs
           touch .pages-dist/.nojekyll
 
           if [[ -n "${CUSTOM_DOMAIN}" ]]; then
