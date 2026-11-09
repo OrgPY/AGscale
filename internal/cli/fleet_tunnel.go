@@ -95,7 +95,7 @@ func startFleetSSHTunnel(agent fleet.AgentRecord, sshConfigPath string) (string,
 		return strings.TrimSuffix(agent.Endpoint, "/"), func() {}, nil
 	}
 
-	sshTarget := strings.TrimSpace(firstNonEmpty(agent.Host, agent.HostID))
+	sshTarget := strings.TrimSpace(agent.Host)
 	if sshTarget == "" {
 		return "", nil, errors.New("ssh-loopback agent missing host target")
 	}
@@ -106,7 +106,12 @@ func startFleetSSHTunnel(agent fleet.AgentRecord, sshConfigPath string) (string,
 	}
 	remoteHost := u.Hostname()
 	remotePort := servicePortFromURL(agent.Endpoint)
-	return startSSHTunnel(sshTarget, sshConfigPath, firstNonEmpty(u.Scheme, "http"), remoteHost, remotePort)
+	baseURL, cleanup, err := startSSHTunnel(sshTarget, sshConfigPath, firstNonEmpty(u.Scheme, "http"), remoteHost, remotePort)
+	if err != nil {
+		return "", nil, err
+	}
+	// Preserve the endpoint's base path (e.g. http://127.0.0.1:8080/api).
+	return baseURL + strings.TrimSuffix(u.EscapedPath(), "/"), cleanup, nil
 }
 
 func startSSHTunnel(sshTarget, sshConfigPath, scheme, remoteHost string, remotePort int) (string, func(), error) {
@@ -117,8 +122,8 @@ func startSSHTunnel(sshTarget, sshConfigPath, scheme, remoteHost string, remoteP
 	localPort := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close()
 
-	if strings.TrimSpace(sshTarget) == "" {
-		return "", nil, errors.New("empty ssh target")
+	if err := fleet.ValidateSSHTarget(sshTarget); err != nil {
+		return "", nil, err
 	}
 	if strings.TrimSpace(remoteHost) == "" {
 		remoteHost = "127.0.0.1"
@@ -135,10 +140,12 @@ func startSSHTunnel(sshTarget, sshConfigPath, scheme, remoteHost string, remoteP
 		"-o", "BatchMode=yes",
 		"-o", "ExitOnForwardFailure=yes",
 	}
-	if cfg := strings.TrimSpace(expandHome(sshConfigPath)); cfg != "" {
-		args = append(args, "-F", cfg)
+	args = append(args, fleet.SSHConfigArgs(expandHome(sshConfigPath))...)
+	forwardHost := remoteHost
+	if strings.Contains(forwardHost, ":") {
+		forwardHost = "[" + forwardHost + "]" // IPv6 literal, e.g. ::1
 	}
-	args = append(args, "-N", "-L", fmt.Sprintf("%d:%s:%d", localPort, remoteHost, remotePort), sshTarget)
+	args = append(args, "-N", "-L", fmt.Sprintf("%d:%s:%d", localPort, forwardHost, remotePort), sshTarget)
 
 	cmd := exec.Command("ssh", args...)
 	cmd.Stdout = &stderr

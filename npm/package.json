@@ -1,12 +1,12 @@
 {
   "name": "@agscale/agscale",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "AGScale CLI npm wrapper (downloads native binary from GitHub Releases)",
   "license": "MIT",
   "private": false,
   "type": "commonjs",
   "agscale": {
-    "releaseRepo": "OrgPY/AGscale"
+    "releaseRepo": "OrgPY/agscale-releases"
   },
   "bin": {
     "agscale": "bin/agscale.js"

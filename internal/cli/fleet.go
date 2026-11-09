@@ -150,10 +150,20 @@ func runFleetScan(args []string) error {
 	remoteTargets := collectRemoteScanTargets(existingHosts, csvToList(*hostsRaw))
 	if len(remoteTargets) > 0 {
 		targetNames := make([]string, 0, len(remoteTargets))
+		hostIDByTarget := map[string]string{}
 		for _, host := range remoteTargets {
-			targetNames = append(targetNames, sshTargetForHost(host))
+			target := sshTargetForHost(host)
+			targetNames = append(targetNames, target)
+			hostIDByTarget[fleet.StableHostID(target)] = firstNonEmpty(host.ID, fleet.StableHostID(firstNonEmpty(host.Address, host.Name)))
 		}
 		remoteFound := discovery.ScanSSHHosts(targetNames, expandHome(*sshCfg), ports, opts)
+		// Scans key agents by the SSH target (which may be an ssh profile alias);
+		// map them back to the owning host record's ID.
+		for i := range remoteFound {
+			if id, ok := hostIDByTarget[remoteFound[i].HostID]; ok {
+				remoteFound[i].HostID = id
+			}
+		}
 		found = append(found, remoteFound...)
 		discoveredHosts = append(discoveredHosts, summarizeDiscoveredHosts(remoteTargets, remoteFound)...)
 	}
@@ -570,7 +580,8 @@ func runFleetHostRemove(args []string) error {
 		}
 		filtered := make([]fleet.AgentRecord, 0, len(inv.Agents))
 		for _, agent := range inv.Agents {
-			if agent.HostID == removed.ID || agent.Host == removed.Name || agent.Host == removed.Address {
+			if agent.HostID == removed.ID || agent.Host == removed.Name || agent.Host == removed.Address ||
+				(removed.SSHProfile != "" && agent.Host == removed.SSHProfile) {
 				continue
 			}
 			filtered = append(filtered, agent)
@@ -1223,8 +1234,7 @@ func sshTargetForHost(host fleet.HostRecord) string {
 }
 
 func isLocalHost(host fleet.HostRecord) bool {
-	value := strings.TrimSpace(firstNonEmpty(host.Address, host.Name))
-	return value == "" || value == "local" || value == "127.0.0.1" || value == "localhost"
+	return fleet.IsLocalHostValue(firstNonEmpty(host.Address, host.Name))
 }
 
 func findFleetAgent(agents []fleet.AgentRecord, target string) (fleet.AgentRecord, bool) {
@@ -1302,7 +1312,7 @@ func normalizeChatPath(raw string) string {
 
 func buildFleetRunRecord(task, topology string, dryRun bool, selector string, requiredSkills []string, selected []fleet.AgentRecord, results []scheduler.StepResult, startedAt time.Time, runErr error) fleet.RunRecord {
 	record := fleet.RunRecord{
-		ID:             fmt.Sprintf("%s-%d", sanitizeName(task), startedAt.Unix()),
+		ID:             fmt.Sprintf("%s-%d", sanitizeName(task), startedAt.UnixNano()),
 		Task:           task,
 		Status:         "Succeeded",
 		Topology:       topology,

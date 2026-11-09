@@ -253,5 +253,16 @@ jobs:
             exit 1
           fi
 
+      - name: Stamp release repo and verify package contents
+        shell: bash
+        env:
+          RELEASE_REPO: ${{ needs.prepare.outputs.release_repo }}
+        run: |
+          set -euo pipefail
+          node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json"));p.agscale={...(p.agscale||{}),releaseRepo:process.env.RELEASE_REPO};fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n");'
+          test -x bin/agscale.js || { echo "npm/bin/agscale.js missing or not executable" >&2; exit 1; }
+          npm pack --dry-run 2>&1 | tee /tmp/npm-pack.txt
+          grep -q "bin/agscale.js" /tmp/npm-pack.txt
+
       - name: Publish
         run: npm publish --access public

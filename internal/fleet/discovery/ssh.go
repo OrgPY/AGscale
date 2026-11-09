@@ -83,9 +83,10 @@ func CheckSSHHost(host, sshConfig string, timeout int) error {
 		"-o", "BatchMode=yes",
 		"-o", fmt.Sprintf("ConnectTimeout=%d", timeout),
 	}
-	if strings.TrimSpace(sshConfig) != "" {
-		args = append(args, "-F", sshConfig)
+	if err := fleet.ValidateSSHTarget(target); err != nil {
+		return err
 	}
+	args = append(args, fleet.SSHConfigArgs(sshConfig)...)
 	args = append(args, target, "sh", "-lc", "hostname >/dev/null && echo ok")
 	cmd := exec.Command("ssh", args...)
 	b, err := cmd.CombinedOutput()
@@ -146,10 +147,11 @@ for p in %s; do
 done
 `, timeout, strings.Join(portTokens, " "))
 
-	args := []string{"-o", "BatchMode=yes"}
-	if strings.TrimSpace(sshConfig) != "" {
-		args = append(args, "-F", sshConfig)
+	if err := fleet.ValidateSSHTarget(host); err != nil {
+		return []string{fmt.Sprintf("FOUND|unknown|ssh://%s|ssh probe failed: %s", host, sanitizeLine(err.Error()))}
 	}
+	args := []string{"-o", "BatchMode=yes"}
+	args = append(args, fleet.SSHConfigArgs(sshConfig)...)
 	args = append(args, host, "sh", "-lc", script)
 	cmd := exec.Command("ssh", args...)
 	b, err := cmd.CombinedOutput()

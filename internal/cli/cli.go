@@ -35,7 +35,9 @@ import (
 
 const defaultNamespace = "default"
 
-var cliVersion = "0.2.0"
+// cliVersion is overridden at release time via
+// -ldflags "-X agscale/internal/cli.cliVersion=<version>" (see .goreleaser-cli.yaml).
+var cliVersion = "dev"
 
 func Execute(args []string) error {
 	if len(args) == 0 {

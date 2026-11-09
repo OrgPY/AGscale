@@ -1,10 +1,11 @@
 # Build outputs
-bin/
-agscale
+/bin/
+/agscale
 .pages-dist/
 
 # Go build cache (local)
-.cache/go-build/
+.cache/
+.npm-cache/
 
 # OS/editor
 .DS_Store
